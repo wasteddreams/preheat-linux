@@ -1,0 +1,147 @@
+.TH PREHEAT 8 "December 2024" "preheat 0.1.0" "System Administration"
+.SH NAME
+preheat \- adaptive readahead daemon for application acceleration
+.SH SYNOPSIS
+.B preheat
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B preheat
+is an adaptive readahead daemon that learns your application usage patterns
+and preloads frequently used programs into memory before you launch them.
+
+The daemon monitors running processes, builds Markov chain models of application
+co-occurrence, and uses the \fBreadahead\fR(2) system call to warm the disk cache
+with predicted file data.
+
+Based on the \fBpreload\fR daemon.
+.SH OPTIONS
+.TP
+\fB\-f\fR, \fB\-\-foreground\fR
+Run in foreground mode without daemonizing. Useful for debugging.
+.TP
+\fB\-c\fR, \fB\-\-conffile\fR \fIFILE\fR
+Use alternate configuration file.
+.br
+Default: \fI/etc/preheat.conf\fR
+.TP
+\fB\-s\fR, \fB\-\-statefile\fR \fIFILE\fR
+Use alternate state file for persistence.
+.br
+Default: \fI/var/lib/preheat/preheat.state\fR
+.TP
+\fB\-l\fR, \fB\-\-logfile\fR \fIFILE\fR
+Use alternate log file.
+.br
+Default: \fI/var/log/preheat.log\fR
+.TP
+\fB\-n\fR, \fB\-\-nice\fR \fILEVEL\fR
+Set process nice level. Higher values give lower priority.
+.br
+Default: 15
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Display help message and exit.
+.TP
+\fB\-v\fR, \fB\-\-version\fR
+Display version information and exit.
+.SH SIGNALS
+.TP
+.B SIGHUP
+Reload configuration file and reopen log file.
+.TP
+.B SIGUSR1
+Dump current state statistics to log file.
+.TP
+.B SIGUSR2
+Save state file immediately.
+.TP
+\fBSIGTERM\fR, \fBSIGINT\fR
+Graceful shutdown with state save.
+.SH ALGORITHM
+The daemon operates in repeating cycles:
+
+.RS
+.IP 1. 3
+\fBScan\fR: Read /proc to identify running processes
+.IP 2. 3
+\fBLearn\fR: Update Markov chain transition probabilities
+.IP 3. 3
+\fBPredict\fR: Calculate log-probabilities for each application
+.IP 4. 3
+\fBPreload\fR: Call readahead(2) on highest-probability binaries and libraries
+.RE
+
+The prediction model uses 4-state Markov chains to capture application
+co-occurrence patterns, combined with correlation analysis.
+.SH FILES
+.TP
+\fI/etc/preheat.conf\fR
+Main configuration file. See \fBpreheat.conf\fR(5).
+.TP
+\fI/var/lib/preheat/preheat.state\fR
+Persistent state file with learned patterns.
+.TP
+\fI/var/log/preheat.log\fR
+Daemon log file.
+.TP
+\fI/run/preheat.pid\fR
+PID file for running daemon.
+.SH SYSTEMD
+Manage with systemd:
+.PP
+.RS
+.nf
+sudo systemctl start preheat
+sudo systemctl stop preheat
+sudo systemctl status preheat
+sudo systemctl enable preheat
+.fi
+.RE
+.SH PERFORMANCE
+.TS
+l l.
+Startup improvement	30-60% for frequent apps
+Daemon memory	~5-10 MB
+CPU overhead	< 1%
+Learning period	Hours to days
+.TE
+.SH EXAMPLES
+Run in foreground for debugging:
+.PP
+.RS
+.B sudo preheat -f
+.RE
+.PP
+Check if running:
+.PP
+.RS
+.B sudo preheat-ctl status
+.RE
+.PP
+View current state:
+.PP
+.RS
+.B sudo preheat-ctl dump
+.br
+.B sudo tail -50 /var/log/preheat.log
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (configuration, permissions, etc.)
+.SH SEE ALSO
+.BR preheat-ctl (1),
+.BR preheat.conf (5),
+.BR readahead (2),
+.BR systemctl (1)
+.SH AUTHOR
+Preheat Contributors
+.br
+Based on the preload daemon
+.SH BUGS
+Report bugs at: https://github.com/wasteddreams/preheat/issues
+.SH LICENSE
+GPL v2. See LICENSE file for details.

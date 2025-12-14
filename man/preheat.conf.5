@@ -1,0 +1,113 @@
+.TH PREHEAT.CONF 5 "December 2024" "preheat 0.1.0" "File Formats"
+.SH NAME
+preheat.conf \- configuration file for preheat daemon
+.SH SYNOPSIS
+.I /etc/preheat.conf
+.SH DESCRIPTION
+Configuration file for the \fBpreheat\fR(8) daemon.
+Uses INI-style format with sections and key=value pairs.
+
+Default values maintain behavioral parity with upstream preload 0.6.4.
+.SH FORMAT
+.nf
+# Comments start with #
+[section]
+key = value
+.fi
+.SH SECTIONS
+.SS [model]
+Controls prediction and memory behavior.
+
+.TS
+l l l.
+\fBParameter\fR	\fBDefault\fR	\fBDescription\fR
+cycle	20	Scan interval in seconds
+minsize	2000000	Min app size to track (bytes)
+memtotal	-10	% of total RAM for preloading
+memfree	50	% of free RAM for preloading
+memcached	0	% of cached RAM for preloading
+.TE
+
+.B Memory Formula:
+.br
+Available = max(0, Total×memtotal/100 + Free×memfree/100) + Cached×memcached/100
+
+.SS [system]
+Controls performance and I/O.
+
+.TS
+l l l.
+\fBParameter\fR	\fBDefault\fR	\fBDescription\fR
+doscan	true	Enable process scanning
+dopredict	true	Enable prediction/preloading
+autosave	3600	State save interval (seconds)
+maxprocs	30	Parallel readahead processes
+sortstrategy	3	File sort: 0=none, 3=block
+manualapps	(empty)	Path to manual whitelist file
+usecorrelation	true	Use Markov correlation
+.TE
+
+.TP
+\fBmanualapps\fR
+Path to a file containing applications to always preload with highest priority.
+File format: one absolute path per line, lines starting with # are comments.
+.br
+Example: manualapps = /etc/preheat.d/apps.list
+
+.SS [ignore]
+Controls path filtering.
+
+.TP
+\fBexeprefix\fR
+Executable path filters. Semicolon-separated.
+.br
+Default: !/usr/sbin/;!/usr/local/sbin/;/usr/;!/
+.br
+! prefix = exclude
+.TP
+\fBmapprefix\fR
+Library path filters. Semicolon-separated.
+.br
+Default: /usr/;/lib;/var/cache/;!/
+.SH EXAMPLES
+.SS Conservative (low resource)
+.nf
+[model]
+cycle = 30
+memfree = 30
+minsize = 5000000
+
+[system]
+maxprocs = 10
+.fi
+
+.SS Aggressive (high performance)
+.nf
+[model]
+cycle = 10
+memfree = 75
+memcached = 20
+
+[system]
+maxprocs = 50
+.fi
+
+.SS SSD Optimization
+.nf
+[system]
+sortstrategy = 0
+maxprocs = 50
+.fi
+.SH RELOADING
+Apply changes without restart:
+.PP
+.RS
+.B sudo preheat-ctl reload
+.RE
+.SH SEE ALSO
+.BR preheat (8),
+.BR preheat-ctl (1)
+.SH AUTHOR
+Preheat Contributors
+.SH LICENSE
+GPL v2. See LICENSE file for details.

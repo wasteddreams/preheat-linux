@@ -1,0 +1,81 @@
+.TH PREHEAT-CTL 1 "December 2024" "preheat 0.1.0" "User Commands"
+.SH NAME
+preheat-ctl \- control utility for preheat daemon
+.SH SYNOPSIS
+.B preheat-ctl
+\fICOMMAND\fR
+.SH DESCRIPTION
+.B preheat-ctl
+is a command-line utility to control and query the preheat daemon.
+It communicates via signals using the daemon's PID file.
+
+Requires root privileges.
+.SH COMMANDS
+.TP
+\fBstatus\fR
+Check if daemon is running. Displays PID if running.
+.br
+Exit code: 0 = running, 1 = stopped
+.TP
+\fBreload\fR
+Reload configuration and reopen log file.
+.br
+Sends SIGHUP to daemon.
+.TP
+\fBdump\fR
+Write state statistics to log file.
+.br
+Sends SIGUSR1. Check \fI/var/log/preheat.log\fR for output.
+.TP
+\fBsave\fR
+Force immediate state file save.
+.br
+Sends SIGUSR2. Bypasses autosave timer.
+.TP
+\fBstop\fR
+Stop daemon gracefully.
+.br
+Sends SIGTERM and waits up to 5 seconds.
+.TP
+\fBhelp\fR
+Display usage information.
+.SH EXAMPLES
+.TP
+Check daemon status:
+.B sudo preheat-ctl status
+
+Output: preheat is running (PID 1234)
+.TP
+Reload after config edit:
+.B sudo preheat-ctl reload
+.TP
+Force save before shutdown:
+.B sudo preheat-ctl save
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (daemon not running, no permission, etc.)
+.SH FILES
+.TP
+\fI/run/preheat.pid\fR
+PID file used to locate running daemon.
+.SH SYSTEMD EQUIVALENTS
+.TS
+l l.
+preheat-ctl status	systemctl status preheat
+preheat-ctl reload	systemctl reload preheat
+preheat-ctl stop	systemctl stop preheat
+.TE
+.PP
+The CLI tool provides faster, direct signal access.
+.SH SEE ALSO
+.BR preheat (8),
+.BR preheat.conf (5),
+.BR systemctl (1)
+.SH AUTHOR
+Preheat Contributors
+.SH LICENSE
+GPL v2. See LICENSE file for details.

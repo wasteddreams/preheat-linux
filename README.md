@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🔥 Preheat
+# Preheat
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=F7931A&center=true&vCenter=true&width=500&lines=Adaptive+readahead+daemon;Make+your+apps+launch+faster;30-60%25+faster+cold+starts)](https://github.com/wasteddreams/preheat)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=500&size=18&duration=3000&pause=1000&color=2E86AB&center=true&vCenter=true&multiline=true&width=600&height=60&lines=Warm+up+your+apps+before+you+need+them;Preload+%E2%80%A2+Predict+%E2%80%A2+Perform)](https://github.com/wasteddreams/preheat)
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://www.kernel.org/)

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Preheat — Adaptive Linux Readahead & Application Preload Daemon
+# Preheat — Linux Application Preload Daemon
 
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=18&duration=3000&pause=1000&color=F7931A&center=true&vCenter=true&width=450&lines=Preload+%E2%80%A2+Predict+%E2%80%A2+Perform;Adaptive+readahead+daemon;30-60%25+faster+cold+starts)](https://github.com/wasteddreams/preheat)
 

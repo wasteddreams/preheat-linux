@@ -18,7 +18,7 @@
 
 ## Overview
 
-Preheat monitors application usage patterns and preloads frequently-used applications into memory before they are launched. This significantly reduces startup times, particularly on systems with slower storage devices.
+Preheat is a lightweight Linux readahead and application preload daemon that monitors application usage patterns and preloads frequently-used binaries into memory before they are launched. It is designed to improve Linux system performance and reduce cold-start times on Kali Linux and other Debian-based distributions, especially on systems with slower HDD storage.
 
 **Features:**
 - Adaptive learning of application usage patterns

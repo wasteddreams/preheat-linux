@@ -37,66 +37,100 @@ I use Kali regularly while learning cybersecurity fundamentals and strengthening
 
 ---
 
-## Quick Install
+## Quick Start
+
+Get preheat running on your Debian-based Linux system in under 5 minutes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wasteddreams/preheat/main/install.sh | sudo bash
-```
+# Clone the repository
+git clone https://github.com/wasteddreams/preheat-linux.git
+cd preheat-linux
 
-Or clone and install manually:
-
-```bash
-git clone https://github.com/wasteddreams/preheat.git
-cd preheat
+# Install (handles dependencies, build, and systemd setup)
 sudo ./scripts/install.sh
-```
 
----
-
-## Manual Installation
-
-### Prerequisites
-
-```bash
-sudo apt-get install autoconf automake pkg-config libglib2.0-dev
-```
-
-### Build & Install
-
-```bash
-autoreconf --install
-./configure
-make
-sudo make install
-```
-
-### Enable Service
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now preheat
-```
-
----
-
-## Usage
-
-```bash
-# Check status
+# Verify it's running
 sudo systemctl status preheat
+```
 
-# View logs
-sudo tail -f /usr/local/var/log/preheat.log
+For detailed installation options, see the [Installation Guide](docs/installation.md).
 
-# Reload configuration
+---
+
+## How It Works
+
+Preheat operates as a background systemd service using a four-phase cycle:
+
+1. **Monitor** — Scans `/proc` to track running applications
+2. **Learn** — Builds Markov chain models of application co-occurrence
+3. **Predict** — Scores applications likely to be launched next
+4. **Preload** — Uses `readahead(2)` to load predicted files into the disk cache
+
+The daemon runs with low priority and conservative defaults, ensuring it never interferes with foreground applications.
+
+→ [How It Works (detailed)](docs/how-it-works.md) · [Architecture](docs/architecture.md)
+
+---
+
+## Who Should Use Preheat
+
+**Ideal for:**
+- Systems with mechanical hard drives (HDD) — highest benefit
+- Laptops and desktops with predictable application workflows
+- Kali Linux users running common security tools repeatedly
+- Users with 4-8 GB RAM where disk cache is frequently evicted
+
+**Less beneficial for:**
+- High-RAM systems (16+ GB) — OS already caches most things
+- NVMe SSDs — already very fast startup times
+- Servers running persistent services — not interactive workloads
+- Highly unpredictable, random application usage
+
+---
+
+## Documentation
+
+Complete documentation is available in the [`docs/`](docs/) directory:
+
+| Guide | Description |
+|-------|-------------|
+| [Introduction](docs/introduction.md) | Project goals, philosophy, and design constraints |
+| [Installation](docs/installation.md) | System requirements and installation methods |
+| [Quick Start](docs/quick-start.md) | First-run verification and basic commands |
+| [How It Works](docs/how-it-works.md) | Operational principles and prediction algorithm |
+| [Architecture](docs/architecture.md) | Internal design and system interaction |
+| [Configuration](docs/configuration.md) | Complete configuration reference |
+| [Advanced Usage](docs/advanced-usage.md) | Performance tuning and debugging |
+| [API Reference](docs/api-reference.md) | CLI commands, signals, and file formats |
+| [Troubleshooting](docs/troubleshooting.md) | Common problems and solutions |
+| [Examples](docs/examples/) | Real-world configuration scenarios |
+
+---
+
+## Configuration Overview
+
+Default configuration works well for most systems. Key options:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `cycle` | 20 sec | How often to scan and predict |
+| `memfree` | 50% | Percentage of free RAM to use for preloading |
+| `sortstrategy` | 3 (block) | I/O optimization (use 0 for SSD) |
+
+Configuration file: `/usr/local/etc/preheat.conf`
+
+```bash
+# Reload after editing
 sudo preheat-ctl reload
 ```
 
+→ [Full Configuration Reference](docs/configuration.md)
+
 ---
 
-## Manual Whitelist
+## Manual Application Whitelist
 
-To always preload specific applications:
+Force specific applications to always be preloaded with highest priority:
 
 ```bash
 sudo mkdir -p /etc/preheat.d
@@ -104,19 +138,7 @@ echo "/usr/bin/firefox" | sudo tee -a /etc/preheat.d/apps.list
 sudo preheat-ctl reload
 ```
 
----
-
-## Configuration
-
-Configuration file: `/usr/local/etc/preheat.conf`
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `cycle` | 20 | Scan interval (seconds) |
-| `memfree` | 50 | Percentage of free RAM to use |
-| `manualapps` | - | Path to whitelist file |
-
-See [CONFIGURATION.md](CONFIGURATION.md) for full reference.
+→ [Advanced Usage: Whitelists and Blacklists](docs/advanced-usage.md)
 
 ---
 
@@ -125,16 +147,27 @@ See [CONFIGURATION.md](CONFIGURATION.md) for full reference.
 ```bash
 sudo systemctl stop preheat
 sudo systemctl disable preheat
+cd preheat-linux
 sudo make uninstall
 ```
 
 ---
 
+## Design Philosophy
+
+- **Safety first** — Conservative defaults that work out of the box
+- **Behavioral parity** — Maintains compatibility with the original preload daemon
+- **Opt-in extensions** — Advanced features are disabled by default
+- **Low overhead** — Minimal CPU (<1%) and memory (~5-10 MB) footprint
+- **Non-intrusive** — Runs at low priority, never interferes with user tasks
+
+---
+
 ## Credits
 
-- Based on the [preload](https://pkgs.org/download/preload) daemon
+- Based on the [preload](https://pkgs.org/download/preload) daemon concept
 - Developed with Claude Opus 4.5 and Claude Sonnet 4.5 via [Antigravity](https://antigravity.google/)
-- Works on Kali Linux and other Debian-based distributions
+- Tested on Kali Linux and Debian-based distributions
 
 ## License
 

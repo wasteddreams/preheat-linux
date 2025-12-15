@@ -75,16 +75,17 @@ The daemon runs with low priority and conservative defaults, ensuring it never i
 ## Who Should Use Preheat
 
 **Ideal for:**
-- Systems with mechanical hard drives (HDD) — highest benefit
-- Laptops and desktops with predictable application workflows
-- Kali Linux users running common security tools repeatedly
-- Users with 4-8 GB RAM where disk cache is frequently evicted
+- Systems with **slower storage** (HDD, SATA SSD) and **unused RAM sitting idle**
+- Laptops and desktops with predictable, repetitive workflows
+- Users who launch the same applications daily (browsers, editors, IDEs)
+- Older hardware where cold starts feel noticeably slow
+- Anyone frustrated by waiting for applications to load
 
 **Less beneficial for:**
-- High-RAM systems (16+ GB) — OS already caches most things
-- NVMe SSDs — already very fast startup times
-- Servers running persistent services — not interactive workloads
-- Highly unpredictable, random application usage
+- Systems with fast NVMe storage (already quick startup times)
+- Machines with very limited RAM (<2 GB) — no headroom for caching
+- Server workloads running persistent, long-lived services
+- Highly unpredictable, random application usage patterns
 
 ---
 

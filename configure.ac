@@ -118,7 +118,6 @@ AC_CONFIG_FILES([
     src/Makefile
     tools/Makefile
     tests/Makefile
-    debian/preheat.service
 ])
 
 AC_OUTPUT

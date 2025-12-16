@@ -57,6 +57,26 @@ For detailed installation options, see the [Installation Guide](docs/installatio
 
 ---
 
+## Diagnostics & Monitoring
+
+Run a system check before or after installation:
+
+```bash
+# Self-test: verify system requirements
+preheat --self-test
+
+# Check daemon status (no sudo needed)
+preheat-ctl status
+
+# View memory available for preloading
+preheat-ctl mem
+
+# See tracked applications
+preheat-ctl predict --top 10
+```
+
+---
+
 ## How It Works
 
 Preheat operates as a background systemd service using a four-phase cycle:

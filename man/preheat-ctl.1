@@ -1,4 +1,4 @@
-.TH PREHEAT-CTL 1 "December 2024" "preheat 0.1.0" "User Commands"
+.TH PREHEAT-CTL 1 "December 2024" "preheat 0.1.1" "User Commands"
 .SH NAME
 preheat-ctl \- control utility for preheat daemon
 .SH SYNOPSIS
@@ -9,7 +9,8 @@ preheat-ctl \- control utility for preheat daemon
 is a command-line utility to control and query the preheat daemon.
 It communicates via signals using the daemon's PID file.
 
-Requires root privileges.
+The \fBstatus\fR, \fBmem\fR, and \fBpredict\fR commands work without root.
+Signal commands (reload, dump, save, stop) require root privileges.
 .SH COMMANDS
 .TP
 \fBstatus\fR
@@ -37,12 +38,23 @@ Stop daemon gracefully.
 .br
 Sends SIGTERM and waits up to 5 seconds.
 .TP
+\fBmem\fR
+Display system memory statistics including available memory for preloading.
+Does not require root.
+.TP
+\fBpredict\fR [\fB--top\fR \fIN\fR]
+Show top predicted applications from state file.
+.br
+Default: shows top 10. Use \fB--top N\fR to change.
+.br
+Does not require root.
+.TP
 \fBhelp\fR
 Display usage information.
 .SH EXAMPLES
 .TP
 Check daemon status:
-.B sudo preheat-ctl status
+.B preheat-ctl status
 
 Output: preheat is running (PID 1234)
 .TP

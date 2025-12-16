@@ -22,7 +22,9 @@ preheat_SOURCES = \
 	state/state.c \
 	state/state.h \
 	utils/logging.c \
-	utils/logging.h
+	utils/logging.h \
+	utils/crc32.c \
+	utils/crc32.h
 
 preheat_CPPFLAGS = \
 	-I$(top_srcdir)/include \

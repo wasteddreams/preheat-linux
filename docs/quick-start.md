@@ -34,6 +34,11 @@ sudo systemctl status preheat
 sudo systemctl start preheat
 ```
 
+**Or first verify system requirements:**
+```bash
+preheat --self-test
+```
+
 ---
 
 ## Step 2: Verify Daemon Operation
@@ -63,7 +68,7 @@ After a few cycles (20 seconds each by default), you'll see:
 Check daemon status programmatically:
 
 ```bash
-sudo preheat-ctl status
+preheat-ctl status
 ```
 
 **Output:**
@@ -123,12 +128,14 @@ You should see entries indicating file preloading activity.
 
 | Task | Command |
 |------|---------|
-| Check if running | `sudo systemctl status preheat` |
+| Run diagnostics | `preheat --self-test` |
+| Check if running | `preheat-ctl status` |
+| View memory stats | `preheat-ctl mem` |
+| View tracked apps | `preheat-ctl predict` |
 | Start service | `sudo systemctl start preheat` |
 | Stop service | `sudo systemctl stop preheat` |
 | Restart service | `sudo systemctl restart preheat` |
 | View live logs | `sudo tail -f /var/log/preheat.log` |
-| Check status | `sudo preheat-ctl status` |
 | Dump stats to log | `sudo preheat-ctl dump` |
 | Force save state | `sudo preheat-ctl save` |
 | Reload config | `sudo preheat-ctl reload` |

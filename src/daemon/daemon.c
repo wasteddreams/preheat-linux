@@ -84,6 +84,10 @@ kp_write_pidfile(void)
     
     fprintf(f, "%d\n", getpid());
     fclose(f);
+    
+    /* Make PID file world-readable so preheat-ctl can read it */
+    chmod(PIDFILE, 0644);
+    
     g_debug("PID file created: %s", PIDFILE);
 }
 
@@ -98,6 +102,52 @@ kp_remove_pidfile(void)
             g_warning("failed to remove PID file %s: %s", PIDFILE, strerror(errno));
     } else {
         g_debug("PID file removed");
+    }
+}
+
+/**
+ * Check for competing preload daemons
+ * Logs warnings if conflicts are detected
+ */
+static void
+kp_check_competing_daemons(void)
+{
+    int conflicts = 0;
+    
+    /* Check for systemd-readahead */
+    if (access("/run/systemd/readahead/", F_OK) == 0) {
+        g_warning("Competing daemon detected: systemd-readahead is active");
+        g_warning("  Remedy: Run 'systemctl disable systemd-readahead-collect systemd-readahead-replay'");
+        conflicts++;
+    }
+    
+    /* Check for ureadahead (Ubuntu) */
+    FILE *pf = popen("pgrep -x ureadahead 2>/dev/null", "r");
+    if (pf) {
+        char buf[32];
+        if (fgets(buf, sizeof(buf), pf)) {
+            g_warning("Competing daemon detected: ureadahead (PID %s)", g_strstrip(buf));
+            g_warning("  Remedy: Run 'systemctl disable ureadahead'");
+            conflicts++;
+        }
+        pclose(pf);
+    }
+    
+    /* Check for original preload daemon */
+    pf = popen("pgrep -x preload 2>/dev/null", "r");
+    if (pf) {
+        char buf[32];
+        if (fgets(buf, sizeof(buf), pf)) {
+            g_warning("Competing daemon detected: preload (PID %s)", g_strstrip(buf));
+            g_warning("  Remedy: Run 'systemctl disable preload' or 'apt remove preload'");
+            conflicts++;
+        }
+        pclose(pf);
+    }
+    
+    if (conflicts > 0) {
+        g_warning("Found %d competing preload daemon(s). Performance may be affected.", conflicts);
+        g_warning("Preheat will continue, but consider disabling conflicting services.");
     }
 }
 
@@ -121,6 +171,9 @@ kp_daemon_run(const char *statefile)
         kp_remove_pidfile();
         return;
     }
+    
+    /* Check for competing daemons at startup */
+    kp_check_competing_daemons();
     
     /* Start state management (sets up periodic tasks) */
     kp_state_run(statefile);

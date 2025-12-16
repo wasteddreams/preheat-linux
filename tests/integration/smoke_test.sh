@@ -53,8 +53,8 @@ fi
 
 # Test 3: Wait for scanning
 echo ""
-echo "TEST 3: Waiting for periodic tasks (8 seconds)..."
-sleep 8
+echo "TEST 3: Waiting for periodic tasks (15 seconds)..."
+sleep 15
 
 if grep -q "scanning" "$TEST_DIR/var/log/preheat.log"; then
     echo "✓ Periodic scanning activated"

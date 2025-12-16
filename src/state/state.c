@@ -12,6 +12,7 @@
 
 #include "common.h"
 #include "../utils/logging.h"
+#include "../utils/crc32.h"
 #include "../config/config.h"
 #include "state.h"
 #include "../monitor/proc.h"
@@ -549,12 +550,14 @@ kp_state_unregister_exe(kp_exe_t *exe)
 #define TAG_EXE         "EXE"
 #define TAG_EXEMAP      "EXEMAP"
 #define TAG_MARKOV      "MARKOV"
+#define TAG_CRC32       "CRC32"
 
 #define READ_TAG_ERROR              "invalid tag"
 #define READ_SYNTAX_ERROR           "invalid syntax"
 #define READ_INDEX_ERROR            "invalid index"
 #define READ_DUPLICATE_INDEX_ERROR  "duplicate index"
 #define READ_DUPLICATE_OBJECT_ERROR "duplicate object"
+#define READ_CRC_ERROR              "CRC32 checksum mismatch"
 
 typedef struct _read_context_t
 {
@@ -764,6 +767,36 @@ set_markov_state_callback(kp_markov_t *markov)
     markov->state = markov_state(markov);
 }
 
+/**
+ * Handle corrupt state file by renaming it and logging
+ * Returns TRUE if state file can be recovered (fresh start)
+ */
+static gboolean
+handle_corrupt_statefile(const char *statefile, const char *reason)
+{
+    char *broken_path;
+    time_t now;
+    struct tm *tm_info;
+    char timestamp[32];
+    
+    now = time(NULL);
+    tm_info = localtime(&now);
+    strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
+    
+    broken_path = g_strdup_printf("%s.broken.%s", statefile, timestamp);
+    
+    if (rename(statefile, broken_path) == 0) {
+        g_warning("State file corrupt (%s), renamed to %s - starting fresh", 
+                  reason, broken_path);
+    } else {
+        g_warning("State file corrupt (%s), could not rename: %s - starting fresh",
+                  reason, strerror(errno));
+    }
+    
+    g_free(broken_path);
+    return TRUE;  /* OK to continue with fresh state */
+}
+
 /* Read state from GIOChannel (VERBATIM from upstream) */
 static char *
 read_state(GIOChannel *f)
@@ -867,7 +900,7 @@ read_state(GIOChannel *f)
 
 /**
  * Load state from file
- * (VERBATIM from upstream preload_state_load)
+ * Modified from upstream to handle corruption gracefully
  */
 void kp_state_load(const char *statefile)
 {
@@ -885,20 +918,25 @@ void kp_state_load(const char *statefile)
         
         f = g_io_channel_new_file(statefile, "r", &err);
         if (!f) {
-            if (err->code == G_FILE_ERROR_ACCES)
-                g_error("cannot open %s for reading: %s", statefile, err->message);
-            else {
+            if (err->code == G_FILE_ERROR_ACCES) {
+                /* Permission denied - this is a configuration problem, warn but continue */
+                g_critical("cannot open %s for reading: %s - continuing without saved state", 
+                           statefile, err->message);
+            } else {
+                /* File doesn't exist or other non-fatal error */
                 g_warning("cannot open %s for reading, ignoring: %s", statefile, err->message);
-                g_error_free(err);
             }
+            g_error_free(err);
         } else {
             char *errmsg;
             
             errmsg = read_state(f);
             g_io_channel_unref(f);
             if (errmsg) {
-                g_error("failed reading state from %s: %s", statefile, errmsg);
+                /* Corruption detected - rename broken file and start fresh */
+                handle_corrupt_statefile(statefile, errmsg);
                 g_free(errmsg);
+                /* Already warned in handle_corrupt_statefile, state remains fresh */
             }
         }
         
@@ -1042,9 +1080,55 @@ write_markov(kp_markov_t *markov, write_context_t *wc)
     write_ln();
 }
 
-/* Write state to GIOChannel (VERBATIM from upstream write_state) */
+/* Write CRC32 footer for state file integrity */
+static void
+write_crc32(write_context_t *wc, int fd)
+{
+    uint32_t crc;
+    off_t file_size;
+    char *content;
+    
+    /* Get file size */
+    file_size = lseek(fd, 0, SEEK_CUR);
+    if (file_size <= 0) {
+        return;  /* Can't calculate CRC, skip silently */
+    }
+    
+    /* Read file contents to calculate CRC */
+    content = g_malloc(file_size);
+    if (!content) {
+        return;
+    }
+    
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        g_free(content);
+        return;
+    }
+    
+    if (read(fd, content, file_size) != file_size) {
+        g_free(content);
+        /* Seek back to end */
+        lseek(fd, 0, SEEK_END);
+        return;
+    }
+    
+    /* Calculate CRC32 */
+    crc = kp_crc32(content, file_size);
+    g_free(content);
+    
+    /* Seek back to end */
+    lseek(fd, 0, SEEK_END);
+    
+    /* Write CRC32 footer */
+    write_tag(TAG_CRC32);
+    g_string_printf(wc->line, "%08X", crc);
+    write_string(wc->line);
+    write_ln();
+}
+
+/* Write state to GIOChannel with CRC32 footer */
 static char *
-write_state(GIOChannel *f)
+write_state(GIOChannel *f, int fd)
 {
     write_context_t wc;
     
@@ -1058,6 +1142,16 @@ write_state(GIOChannel *f)
     if (!wc.err) g_hash_table_foreach   (kp_state->exes, (GHFunc)write_exe, &wc);
     if (!wc.err) kp_exemap_foreach ((GHFunc)write_exemap, &wc);
     if (!wc.err) kp_markov_foreach ((GFunc)write_markov, &wc);
+    
+    /* Flush before CRC calculation */
+    if (!wc.err) {
+        g_io_channel_flush(f, &wc.err);
+    }
+    
+    /* Add CRC32 footer */
+    if (!wc.err) {
+        write_crc32(&wc, fd);
+    }
     
     g_string_free(wc.line, TRUE);
     if (wc.err) {
@@ -1077,12 +1171,12 @@ true_func(void)
 
 /**
  * Save state to file
- * (VERBATIM from upstream preload_state_save)
+ * Modified from upstream to add fsync for data durability
  */
 void kp_state_save(const char *statefile)
 {
     if (kp_state->dirty && statefile && *statefile) {
-        int fd;
+        int fd = -1;
         GIOChannel *f;
         char *tmpfile;
         
@@ -1091,29 +1185,40 @@ void kp_state_save(const char *statefile)
         tmpfile = g_strconcat(statefile, ".tmp", NULL);
         g_debug("to be honest, saving state to %s", tmpfile);
         
-        fd = open(tmpfile, O_WRONLY | O_CREAT | O_NOFOLLOW, 0600);
-        if (0 > fd) {
+        fd = open(tmpfile, O_RDWR | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+        if (fd < 0) {
             g_critical("cannot open %s for writing, ignoring: %s", tmpfile, strerror(errno));
         } else {
             char *errmsg;
             
             f = g_io_channel_unix_new(fd);
             
-            errmsg = write_state(f);
+            errmsg = write_state(f, fd);
+            g_io_channel_flush(f, NULL);
             g_io_channel_unref(f);
+            
             if (errmsg) {
                 g_critical("failed writing state to %s, ignoring: %s", tmpfile, errmsg);
                 g_free(errmsg);
+                close(fd);
                 unlink(tmpfile);
             } else {
-                if (0 > rename(tmpfile, statefile)) {
-                    g_critical("failed to rename %s to %s", tmpfile, statefile);
+                /* fsync to ensure data durability before rename */
+                if (fsync(fd) < 0) {
+                    g_critical("fsync failed for %s: %s - state may be lost on crash", 
+                               tmpfile, strerror(errno));
+                }
+                close(fd);
+                
+                if (rename(tmpfile, statefile) < 0) {
+                    g_critical("failed to rename %s to %s: %s", 
+                               tmpfile, statefile, strerror(errno));
+                    unlink(tmpfile);
                 } else {
                     g_debug("successfully renamed %s to %s", tmpfile, statefile);
                 }
             }
         }
-        close(fd);
         
         g_free(tmpfile);
         

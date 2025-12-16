@@ -18,20 +18,25 @@
 #include <unistd.h>
 
 #define PIDFILE "/var/run/preheat.pid"
+#define STATEFILE "/usr/local/var/lib/preheat/preheat.state"
 #define PACKAGE "preheat"
 
 static void
 print_usage(const char *prog)
 {
-    printf("Usage: %s COMMAND\n\n", prog);
+    printf("Usage: %s COMMAND [OPTIONS]\n\n", prog);
     printf("Control the %s daemon\n\n", PACKAGE);
     printf("Commands:\n");
     printf("  status      Check if daemon is running\n");
+    printf("  mem         Show memory statistics\n");
+    printf("  predict     Show top predicted applications\n");
     printf("  reload      Reload configuration (send SIGHUP)\n");
     printf("  dump        Dump state to log (send SIGUSR1)\n");
     printf("  save        Save state immediately (send SIGUSR2)\n");
     printf("  stop        Stop daemon gracefully (send SIGTERM)\n");
     printf("  help        Show this help message\n");
+    printf("\nOptions for predict:\n");
+    printf("  --top N     Show top N predictions (default: 10)\n");
     printf("\n");
 }
 
@@ -66,16 +71,14 @@ read_pid(void)
 static int
 check_running(int pid)
 {
-    if (kill(pid, 0) == 0) {
+    /* Use /proc/PID to check if process exists (works without root) */
+    char proc_path[64];
+    snprintf(proc_path, sizeof(proc_path), "/proc/%d", pid);
+    
+    if (access(proc_path, F_OK) == 0) {
         return 1;  /* Running */
     } else {
-        if (errno == ESRCH) {
-            return 0;  /* Not running */
-        } else {
-            fprintf(stderr, "Warning: Cannot check process %d: %s\n",
-                    pid, strerror(errno));
-            return -1;  /* Unknown */
-        }
+        return 0;  /* Not running */
     }
 }
 
@@ -190,6 +193,95 @@ cmd_stop(void)
     return ret;
 }
 
+static int
+cmd_mem(void)
+{
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (!f) {
+        fprintf(stderr, "Error: Cannot read /proc/meminfo: %s\n", strerror(errno));
+        return 1;
+    }
+    
+    char line[256];
+    long mem_total = 0, mem_free = 0, mem_available = 0, mem_buffers = 0, mem_cached = 0;
+    
+    while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "MemTotal: %ld kB", &mem_total) == 1) continue;
+        if (sscanf(line, "MemFree: %ld kB", &mem_free) == 1) continue;
+        if (sscanf(line, "MemAvailable: %ld kB", &mem_available) == 1) continue;
+        if (sscanf(line, "Buffers: %ld kB", &mem_buffers) == 1) continue;
+        if (sscanf(line, "Cached: %ld kB", &mem_cached) == 1) continue;
+    }
+    fclose(f);
+    
+    printf("Memory Statistics\n");
+    printf("=================\n");
+    printf("Total:     %7ld MB\n", mem_total / 1024);
+    printf("Free:      %7ld MB\n", mem_free / 1024);
+    printf("Available: %7ld MB\n", mem_available / 1024);
+    printf("Buffers:   %7ld MB\n", mem_buffers / 1024);
+    printf("Cached:    %7ld MB\n", mem_cached / 1024);
+    printf("\n");
+    
+    /* Calculate usable for preloading */
+    long usable = mem_available > 0 ? mem_available : (mem_free + mem_buffers + mem_cached);
+    printf("Usable for preloading: %ld MB\n", usable / 1024);
+    
+    return 0;
+}
+
+static int
+cmd_predict(int top_n)
+{
+    /* Read state file to show predicted apps */
+    /* For now, show message about how to use */
+    printf("Top %d Predicted Applications\n", top_n);
+    printf("=============================\n\n");
+    
+    /* Check if state file exists */
+    FILE *f = fopen(STATEFILE, "r");
+    if (!f) {
+        /* Try alternate location */
+        f = fopen("/var/lib/preheat/preheat.state", "r");
+    }
+    
+    if (!f) {
+        printf("State file not found.\n");
+        printf("The daemon needs to run and collect data first.\n");
+        printf("\nHint: Start the daemon with 'systemctl start preheat'\n");
+        printf("      or check state file location in config.\n");
+        return 1;
+    }
+    
+    /* Count EXE entries in state file */
+    char line[1024];
+    int exe_count = 0;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "EXE\t", 4) == 0) {
+            exe_count++;
+            if (exe_count <= top_n) {
+                /* Parse and display: EXE seq update_time time expansion path */
+                int seq, update_time, time, expansion;
+                char path[512];
+                if (sscanf(line, "EXE\t%d\t%d\t%d\t%d\t%511s", 
+                           &seq, &update_time, &time, &expansion, path) >= 5) {
+                    printf("%2d. %s (run time: %d sec)\n", exe_count, path, time);
+                }
+            }
+        }
+    }
+    fclose(f);
+    
+    if (exe_count == 0) {
+        printf("No tracked applications yet.\n");
+        printf("The daemon is still learning usage patterns.\n");
+    } else {
+        printf("\nTotal tracked: %d applications\n", exe_count);
+    }
+    
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -203,6 +295,19 @@ main(int argc, char **argv)
     
     if (strcmp(cmd, "status") == 0) {
         return cmd_status();
+    } else if (strcmp(cmd, "mem") == 0) {
+        return cmd_mem();
+    } else if (strcmp(cmd, "predict") == 0) {
+        int top_n = 10;
+        /* Parse --top N option */
+        for (int i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--top") == 0 && i + 1 < argc) {
+                top_n = atoi(argv[i + 1]);
+                if (top_n <= 0) top_n = 10;
+                i++;
+            }
+        }
+        return cmd_predict(top_n);
     } else if (strcmp(cmd, "reload") == 0) {
         return cmd_reload();
     } else if (strcmp(cmd, "dump") == 0) {

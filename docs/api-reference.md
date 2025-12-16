@@ -25,6 +25,7 @@ Adaptive readahead daemon that learns application usage patterns and preloads pr
 | `-l` | `--logfile` | FILE | Log file path |
 | `-n` | `--nice` | LEVEL | Process nice level (0-19) |
 | `-f` | `--foreground` | - | Run in foreground (don't daemonize) |
+| `-t` | `--self-test` | - | Run diagnostics and exit |
 | `-h` | `--help` | - | Show help and exit |
 | `-v` | `--version` | - | Show version and exit |
 
@@ -59,6 +60,11 @@ sudo preheat -c /path/to/custom.conf
 sudo preheat -s /tmp/preheat-test.state
 ```
 
+**Run system diagnostics:**
+```bash
+preheat --self-test
+```
+
 ### Exit Codes
 
 | Code | Meaning |
@@ -78,7 +84,10 @@ preheat-ctl COMMAND
 
 ### Description
 
-Command-line tool to control and query the running preheat daemon. Requires root privileges.
+Command-line tool to control and query the running preheat daemon.
+
+The `status`, `mem`, and `predict` commands work without root.
+Signal commands (`reload`, `dump`, `save`, `stop`) require root privileges.
 
 ### Commands
 
@@ -87,7 +96,7 @@ Command-line tool to control and query the running preheat daemon. Requires root
 Check if the daemon is running.
 
 ```bash
-sudo preheat-ctl status
+preheat-ctl status
 ```
 
 **Output (running):**
@@ -185,6 +194,56 @@ Display usage information.
 ```bash
 preheat-ctl help
 ```
+
+---
+
+#### mem
+
+Display system memory statistics.
+
+```bash
+preheat-ctl mem
+```
+
+**Output:**
+```
+Memory Statistics
+=================
+Total:       16384 MB
+Free:         4000 MB
+Available:    8000 MB
+Buffers:       500 MB
+Cached:       3500 MB
+
+Usable for preloading: 8000 MB
+```
+
+**No root required.**
+
+---
+
+#### predict
+
+Show top predicted applications from state file.
+
+```bash
+preheat-ctl predict
+preheat-ctl predict --top 5
+```
+
+**Output:**
+```
+Top 10 Predicted Applications
+=============================
+
+ 1. /usr/bin/firefox (run time: 45 sec)
+ 2. /usr/bin/code (run time: 30 sec)
+...
+
+Total tracked: 23 applications
+```
+
+**No root required.**
 
 ---
 

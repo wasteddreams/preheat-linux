@@ -1,4 +1,4 @@
-.TH PREHEAT 8 "December 2024" "preheat 0.1.0" "System Administration"
+.TH PREHEAT 8 "December 2024" "preheat 0.1.1" "System Administration"
 .SH NAME
 preheat \- adaptive readahead daemon for application acceleration
 .SH SYNOPSIS
@@ -41,6 +41,10 @@ Default: 15
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Display help message and exit.
+.TP
+\fB\-t\fR, \fB\-\-self-test\fR
+Run system diagnostics and exit. Checks /proc availability, readahead() syscall,
+memory thresholds, and competing daemons. Returns 0 if all checks pass.
 .TP
 \fB\-v\fR, \fB\-\-version\fR
 Display version information and exit.
@@ -118,7 +122,7 @@ Run in foreground for debugging:
 Check if running:
 .PP
 .RS
-.B sudo preheat-ctl status
+.B preheat-ctl status
 .RE
 .PP
 View current state:

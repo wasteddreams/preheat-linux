@@ -165,7 +165,7 @@ all_digits(const char *s)
 
 /**
  * Iterate over all running processes
- * (VERBATIM from upstream proc_foreach)
+ * Modified from upstream to handle /proc failures gracefully
  */
 void
 kp_proc_foreach(GHFunc func, gpointer user_data)
@@ -173,10 +173,20 @@ kp_proc_foreach(GHFunc func, gpointer user_data)
     DIR *proc;
     struct dirent *entry;
     pid_t selfpid = getpid();
+    static int proc_fail_logged = 0;
     
     proc = opendir("/proc");
-    if (!proc)
-        g_error("failed opening /proc: %s", strerror(errno));
+    if (!proc) {
+        /* Graceful degradation: log once and skip this cycle */
+        if (!proc_fail_logged) {
+            g_warning("failed opening /proc: %s - will retry next cycle", strerror(errno));
+            proc_fail_logged = 1;
+        }
+        return;  /* Skip this scan cycle, don't crash */
+    }
+    
+    /* Reset failure counter on success */
+    proc_fail_logged = 0;
     
     while ((entry = readdir(proc))) {
         if (entry->d_name && all_digits(entry->d_name)) {

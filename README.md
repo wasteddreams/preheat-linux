@@ -25,7 +25,7 @@ Preheat is a lightweight Linux readahead and application preload daemon that mon
 - Correlation-based prediction engine
 - Manual whitelist support for priority applications
 - Systemd integration with security hardening
-- Low memory footprint (~5MB)
+- Low memory footprint (~5MB daemon RSS)*
 
 ---
 
@@ -159,8 +159,12 @@ sudo make uninstall
 - **Safety first** — Conservative defaults that work out of the box
 - **Behavioral parity** — Maintains compatibility with the original preload daemon
 - **Opt-in extensions** — Advanced features are disabled by default
-- **Low overhead** — Minimal CPU (<1%) and memory (~5-10 MB) footprint
+- **Low overhead** — Minimal CPU (<1%) and memory (~5-10 MB RSS) footprint*
 - **Non-intrusive** — Runs at low priority, never interferes with user tasks
+
+---
+
+> **\* Note on memory usage:** `systemctl status preheat` may report higher memory (100-400MB) because systemd's cgroup accounting includes page cache from `readahead()` operations. This cached data is shared system-wide and reclaimable under memory pressure. The daemon's actual private memory (RSS) is ~5-10MB—verify with `ps aux | grep preheat`.
 
 ---
 

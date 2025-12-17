@@ -1,6 +1,7 @@
 # Configuration Guide
 
-Configuration file: `/etc/preheat.conf` (or `/usr/local/etc/preheat.conf`)
+Configuration file: `/usr/local/etc/preheat.conf` (default installation)  
+*System packages may use `/etc/preheat.conf` instead*
 
 Format: INI-style with sections and key-value pairs
 
@@ -246,7 +247,7 @@ autosave = 3600
 
 ### Method 1: Signal
 ```bash
-sudo kill -HUP $(cat /var/run/preheat.pid)
+sudo kill -HUP $(cat /run/preheat.pid)
 ```
 
 ### Method 2: CLI Tool

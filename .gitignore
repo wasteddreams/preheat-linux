@@ -64,3 +64,8 @@ test-suite.log
 
 # Reference materials (not for distribution)
 /upstream-source/
+# Build artifacts
+autom4te.cache/
+configure~
+config.h.in~
+*.in~

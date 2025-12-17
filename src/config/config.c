@@ -192,18 +192,39 @@ kp_config_load(const char *conffile, gboolean fail)
     /* Copy new configuration */
     *kp_conf = newconf;
     
+    /* Validate configuration values */
+    if (kp_conf->model.cycle < 5 || kp_conf->model.cycle > 300) {
+        g_warning("Invalid cycle value %d (must be 5-300), using default 20", 
+                  kp_conf->model.cycle);
+        kp_conf->model.cycle = 20;
+    }
+    
+    if (kp_conf->model.memfree < 0 || kp_conf->model.memfree > 100) {
+        g_warning("Invalid memfree value %d (must be 0-100%%), using default 50", 
+                  kp_conf->model.memfree);
+        kp_conf->model.memfree = 50;
+    }
+    
+    if (kp_conf->system.maxprocs < 0 || kp_conf->system.maxprocs > 100) {
+        g_warning("Invalid maxprocs value %d (must be 0-100), using default 30", 
+                  kp_conf->system.maxprocs);
+        kp_conf->system.maxprocs = 30;
+    }
+    
+    if (kp_conf->system.sortstrategy < 0 || kp_conf->system.sortstrategy > 3) {
+        g_warning("Invalid sortstrategy value %d (must be 0-3), using default 3", 
+                  kp_conf->system.sortstrategy);
+        kp_conf->system.sortstrategy = 3;
+    }
+    
+    if (kp_conf->model.minsize < 0) {
+        g_warning("Invalid min size value %d (must be >= 0), using default 2000000", 
+                  kp_conf->model.minsize);
+        kp_conf->model.minsize = 2000000;
+    }
+    
     /* Load manual apps from file */
     load_manual_apps_file(kp_conf);
-    
-#ifdef ENABLE_PREHEAT_EXTENSIONS
-    if (kp_conf->preheat.enable_preheat_scoring) {
-        g_message("Preheat scoring extensions ENABLED (boost: %.2fx)", 
-                  kp_conf->preheat.preheat_tool_boost / 100.0);
-    }
-    if (kp_conf->preheat.enable_time_learning) {
-        g_message("Time-of-day learning ENABLED");
-    }
-#endif
 }
 
 /**

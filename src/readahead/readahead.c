@@ -71,10 +71,14 @@ map_path_compare(const kp_map_t **pa, const kp_map_t **pb)
     int i;
     
     i = strcmp(a->path, b->path);
-    if (!i) /* same file */
-        i = a->offset - b->offset;
-    if (!i) /* same offset?! */
-        i = b->length - a->length;
+    if (!i) { /* same file - compare offsets safely */
+        if (a->offset < b->offset) i = -1;
+        else if (a->offset > b->offset) i = 1;
+    }
+    if (!i) { /* same offset?! - compare lengths safely */
+        if (a->length < b->length) i = 1;  /* larger first */
+        else if (a->length > b->length) i = -1;
+    }
     
     return i;
 }
@@ -89,13 +93,21 @@ map_block_compare(const kp_map_t **pa, const kp_map_t **pb)
     const kp_map_t *a = *pa, *b = *pb;
     int i;
     
-    i = a->block - b->block;
+    /* Compare blocks safely */
+    if (a->block < b->block) i = -1;
+    else if (a->block > b->block) i = 1;
+    else i = 0;
+    
     if (!i) /* no block? */
         i = strcmp(a->path, b->path);
-    if (!i) /* same file */
-        i = a->offset - b->offset;
-    if (!i) /* same offset?! */
-        i = b->length - a->length;
+    if (!i) { /* same file - compare offsets safely */
+        if (a->offset < b->offset) i = -1;
+        else if (a->offset > b->offset) i = 1;
+    }
+    if (!i) { /* same offset?! - compare lengths safely */
+        if (a->length < b->length) i = 1;  /* larger first */
+        else if (a->length > b->length) i = -1;
+    }
     
     return i;
 }

@@ -42,6 +42,6 @@ void kp_log_reopen(const char *logfile);
  * Check if debug logging is enabled
  * @return TRUE if debug messages will be logged
  */
-#define kp_is_debugging() (G_LOG_LEVEL_DEBUG <= G_LOG_LEVEL_ERROR << kp_log_level)
+#define kp_is_debugging() (kp_log_level >= G_LOG_LEVEL_DEBUG)
 
 #endif /* LOGGING_H */

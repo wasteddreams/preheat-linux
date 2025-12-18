@@ -46,14 +46,21 @@ Get preheat running on your Debian-based Linux system in under 5 minutes:
 git clone https://github.com/wasteddreams/preheat-linux.git
 cd preheat-linux
 
-# Install (handles dependencies, build, and systemd setup)
-sudo ./scripts/install.sh
+# Install (automatic dependency checking, build, and systemd setup)
+sudo bash install.sh
 
 # Verify it's running
 sudo systemctl status preheat
+preheat-ctl status
 ```
 
-For detailed installation options, see the [Installation Guide](docs/installation.md).
+**New in v0.1.2:**
+- ✨ Interactive whitelist configuration during installation
+- ✨ Comprehensive dependency validation before build
+- ✨ Safe reinstall script with data preservation
+- ✨ Production-grade stability and security audit
+
+For detailed installation options, see [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -73,6 +80,25 @@ preheat-ctl mem
 
 # See tracked applications
 preheat-ctl predict --top 10
+```
+
+### Lifecycle Management
+
+```bash
+# Reinstall (preserves learned data)
+sudo bash reinstall.sh
+
+# Fresh install (wipes all data)
+sudo bash reinstall.sh --clean
+
+# Uninstall (preserves data by default)
+sudo bash uninstall.sh
+
+# Uninstall and remove all data
+sudo bash uninstall.sh --purge-data
+
+# Update to latest version (with automatic rollback)
+sudo preheat-ctl update
 ```
 
 ---

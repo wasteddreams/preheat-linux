@@ -34,6 +34,7 @@ print_usage(const char *prog)
     printf("  dump        Dump state to log (send SIGUSR1)\n");
     printf("  save        Save state immediately (send SIGUSR2)\n");
     printf("  stop        Stop daemon gracefully (send SIGTERM)\n");
+    printf("  update      Update preheat to latest version\n");
     printf("  help        Show this help message\n");
     printf("\nOptions for predict:\n");
     printf("  --top N     Show top N predictions (default: 10)\n");
@@ -316,6 +317,41 @@ main(int argc, char **argv)
         return cmd_save();
     } else if (strcmp(cmd, "stop") == 0) {
         return cmd_stop();
+    } else if (strcmp(cmd, "update") == 0) {
+        /* Execute update script */
+        if (geteuid() != 0) {
+            fprintf(stderr, "Error: Update requires root privileges\n");
+            fprintf(stderr, "Try: sudo %s update\n", argv[0]);
+            return 1;
+        }
+        
+        /* Try multiple possible script locations */
+        const char *script_locations[] = {
+            "/usr/local/share/preheat/update.sh",  /* Installed location */
+            "./scripts/update.sh",                  /* Development/source tree */
+            NULL
+        };
+        
+        for (int i = 0; script_locations[i] != NULL; i++) {
+            if (access(script_locations[i], X_OK) == 0) {
+                execl("/bin/bash", "bash", script_locations[i], NULL);
+                /* If execl returns, it failed */
+                perror("Failed to execute update script");
+                return 1;
+            }
+        }
+        
+        /* No script found */
+        fprintf(stderr, "Error: Update script not found\n");
+        fprintf(stderr, "\nManual update procedure:\n");
+        fprintf(stderr, "  1. cd /path/to/preheat-linux\n");
+        fprintf(stderr, "  2. git pull\n");
+        fprintf(stderr, "  3. autoreconf --install --force\n");
+        fprintf(stderr, "  4. ./configure\n");
+        fprintf(stderr, "  5. make\n");
+        fprintf(stderr, "  6. sudo make install\n");
+        fprintf(stderr, "  7. sudo systemctl restart preheat\n");
+        return 1;
     } else if (strcmp(cmd, "help") == 0 || strcmp(cmd, "--help") == 0 || strcmp(cmd, "-h") == 0) {
         print_usage(argv[0]);
         return 0;

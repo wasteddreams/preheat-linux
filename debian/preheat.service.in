@@ -13,6 +13,9 @@ RestartSec=10s
 Nice=15
 
 # Security hardening
+# NOTE: ProtectHome=read-only restricts access to home directories
+# State and config files MUST be in system directories (/var, /etc)
+# This is intentional for security - daemon runs system-wide only
 PrivateTmp=yes
 ProtectHome=read-only
 ProtectSystem=full

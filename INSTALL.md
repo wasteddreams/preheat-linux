@@ -224,6 +224,15 @@ sudo systemctl restart preheat
 
 **One-way migration**: Preheat can import preload 0.6.4 state files, but preload **cannot** read Preheat states.
 
+> [!WARNING]
+> **Critical: State Migration is ONE-WAY**
+> 
+> Preheat can read preload 0.6.4 state files, but the original preload daemon
+> will NOT be able to read preheat state files. Once you migrate to preheat,
+> you cannot go back to preload without losing your learned data.
+> 
+> **Always back up your preload state before migrating!**
+
 If migrating from preload:
 ```bash
 # Backup preload state

@@ -65,6 +65,52 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Validate dependencies before proceeding
+echo -e "${CYAN}Checking prerequisites...${NC}"
+MISSING=""
+MISSING_PKGS=""
+
+# Check for required commands
+for cmd in git autoconf automake pkg-config gcc make; do
+    if ! command -v $cmd &>/dev/null; then
+        MISSING="$MISSING $cmd"
+        case $cmd in
+            git)
+                MISSING_PKGS="$MISSING_PKGS git"
+                ;;
+            autoconf|automake)
+                MISSING_PKGS="$MISSING_PKGS autoconf automake"
+                ;;
+            pkg-config)
+                MISSING_PKGS="$MISSING_PKGS pkg-config"
+                ;;
+            gcc|make)
+                MISSING_PKGS="$MISSING_PKGS build-essential"
+                ;;
+        esac
+    fi
+done
+
+# Check for GLib development headers
+if ! pkg-config --exists glib-2.0 2>/dev/null; then
+    MISSING="$MISSING libglib2.0-dev"
+    MISSING_PKGS="$MISSING_PKGS libglib2.0-dev"
+fi
+
+if [ -n "$MISSING" ]; then
+    echo -e "${RED}${BOLD}✗ Missing dependencies:${NC}$MISSING"
+    echo ""
+    echo -e "${YELLOW}Install with:${NC}"
+    # Remove duplicates and format
+    UNIQUE_PKGS=$(echo "$MISSING_PKGS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    echo -e "${CYAN}  apt-get install$UNIQUE_PKGS${NC}"
+    echo ""
+    exit 1
+fi
+
+echo -e "${GREEN}      ✓ All prerequisites present${NC}"
+echo ""
+
 # System info
 echo -e "${DIM}┌─ System Information${NC}"
 echo -e "${DIM}│${NC} OS: $(lsb_release -ds 2>/dev/null || echo "Unknown")"
@@ -165,6 +211,48 @@ if [[ "$choice" =~ ^[Yy]$ ]]; then
 else
     echo -e "${YELLOW}      ○ Autostart skipped${NC}"
     echo -e "${DIM}        Enable later: ${CYAN}systemctl enable preheat${NC}"
+fi
+
+# Whitelist configuration prompt (Phase 1: Install-Time Whitelist Onboarding)
+echo ""
+if [ -t 0 ]; then  # Interactive TTY check
+    echo -e "${YELLOW}Add applications to whitelist for priority preloading?${NC}"
+    echo -e "${DIM}  Examples: /usr/bin/firefox /usr/bin/code /usr/bin/burpsuite${NC}"
+    read -p "$(echo -e ${BOLD})Enter paths (space-separated) or press Enter to skip:${NC} " whitelist_input
+    
+    if [ -n "$whitelist_input" ]; then
+        mkdir -p /etc/preheat.d
+        > /etc/preheat.d/apps.list  # Create empty file
+        
+        valid_count=0
+        invalid_count=0
+        
+        for app_path in $whitelist_input; do
+            # Validate: absolute path, exists, executable
+            if [[ "$app_path" == /* ]] && [ -x "$app_path" ]; then
+                echo "$app_path" >> /etc/preheat.d/apps.list
+                echo -e "${GREEN}      ✓ Added: $app_path${NC}"
+                ((valid_count++))
+            else
+                echo -e "${YELLOW}      ⚠ Skipped (invalid): $app_path${NC}"
+                ((invalid_count++))
+            fi
+        done
+        
+        if [ $valid_count -gt 0 ]; then
+            echo -e "${GREEN}      ✓ Whitelist configured ($valid_count apps)${NC}"
+            echo "$valid_count application(s) added to whitelist" >> /tmp/preheat_install.log
+        else
+            rm -f /etc/preheat.d/apps.list
+            echo -e "${DIM}      No valid apps added${NC}"
+        fi
+        
+        if [ $invalid_count -gt 0 ]; then
+            echo -e "${DIM}        ($invalid_count invalid entries skipped)${NC}"
+        fi
+    else
+        echo -e "${DIM}      Whitelist skipped${NC}"
+    fi
 fi
 
 # Cleanup

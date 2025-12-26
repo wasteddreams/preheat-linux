@@ -1623,23 +1623,42 @@ remove_from_config_file(const char *filepath, const char *entry)
 /**
  * Try to resolve app name to full path
  * Returns resolved path, or original name if not found
+ * Now follows symlinks to find the actual binary
  */
 static const char *
-resolve_app_name(const char *name, char *buffer, size_t bufsize)
+resolve_app_name(const char *name, char *buffer, size_t bufsize __attribute__((unused)))
 {
-    if (!name || name[0] == '/') {
-        return name;  /* Already absolute or NULL */
+    char temp_path[PATH_MAX];
+    char *resolved = NULL;
+    
+    if (!name) {
+        return name;
+    }
+    
+    /* If already absolute, try to resolve it */
+    if (name[0] == '/') {
+        resolved = realpath(name, buffer);
+        return resolved ? resolved : name;
     }
     
     /* Try common paths */
-    snprintf(buffer, bufsize, "/usr/bin/%s", name);
-    if (access(buffer, F_OK) == 0) return buffer;
+    snprintf(temp_path, sizeof(temp_path), "/usr/bin/%s", name);
+    if (access(temp_path, F_OK) == 0) {
+        resolved = realpath(temp_path, buffer);
+        return resolved ? resolved : temp_path;
+    }
     
-    snprintf(buffer, bufsize, "/bin/%s", name);
-    if (access(buffer, F_OK) == 0) return buffer;
+    snprintf(temp_path, sizeof(temp_path), "/bin/%s", name);
+    if (access(temp_path, F_OK) == 0) {
+        resolved = realpath(temp_path, buffer);
+        return resolved ? resolved : temp_path;
+    }
     
-    snprintf(buffer, bufsize, "/usr/local/bin/%s", name);
-    if (access(buffer, F_OK) == 0) return buffer;
+    snprintf(temp_path, sizeof(temp_path), "/usr/local/bin/%s", name);
+    if (access(temp_path, F_OK) == 0) {
+        resolved = realpath(temp_path, buffer);
+        return resolved ? resolved : temp_path;
+    }
     
     return name;  /* Not found, use original */
 }

@@ -1040,16 +1040,13 @@ cmd_explain(const char *app_name)
     
     printf("    ──────────────────────────────────────\n");
     printf("    Combined:    %.2f ", combined);
-    if (combined > 0.7) {
+    if (combined > 0.6) {
         printf("(HIGH PRIORITY)\n");
-    } else if (combined > 0.3) {
+    } else if ( combined > 0.3) {
         printf("(MEDIUM PRIORITY)\n");
     } else {
         printf("(LOW PRIORITY)\n");
-    }
-    
-    /* Decision & Recommendation */
-    printf("\n  Decision: ");
+    }    printf("\n  Decision: ");
     if (should_preload) {
         printf("✅ Preloaded\n");
         printf("    This app exceeds the preload threshold (%.2f > 0.30)\n", combined);

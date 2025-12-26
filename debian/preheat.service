@@ -42,7 +42,8 @@ RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes
 
 # Restrict system calls to essential operations only
-SystemCallFilter=@file-system @process @signal readahead
+# @io group needed for dup2() (log file redirection in kp_log_init/kp_log_reopen)
+SystemCallFilter=@file-system @io @process @signal readahead
 SystemCallErrorNumber=EPERM
 
 # Make system directories read-only (but allow /usr/local for logs/state)

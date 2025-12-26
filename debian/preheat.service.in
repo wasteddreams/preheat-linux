@@ -42,8 +42,15 @@ RestrictAddressFamilies=AF_UNIX
 RestrictNamespaces=yes
 
 # Restrict system calls to essential operations only
-# @io group needed for dup2() (log file redirection in kp_log_init/kp_log_reopen)
-SystemCallFilter=@file-system @io @process @signal readahead
+# @system-service includes all syscalls commonly needed by system daemons:
+#   - @basic-io: mmap, munmap, brk, etc.
+#   - @file-system: open, read, write, stat, etc.
+#   - @io: dup2, close, pipe, etc.
+#   - @ipc: shmat, shmctl, msgget, etc.
+#   - @process: fork, execve, wait, etc.
+#   - @signal: kill, sigaction, etc.
+#   - Plus: clock_gettime, futex, and other daemon essentials
+SystemCallFilter=@system-service readahead
 SystemCallErrorNumber=EPERM
 
 # Make system directories read-only (but allow /usr/local for logs/state)

@@ -263,6 +263,10 @@ void kp_state_save(const char *statefile)
         g_debug("saving state done");
     }
 
+    /* B009: Clear bad_exes after save. This is intentional - bad_exes
+     * contains paths that failed to stat/open during this cycle. Clearing
+     * after save ensures we don't accumulate stale entries, and transient
+     * failures (like unmounted filesystems) get re-tried on next cycle. */
     g_hash_table_foreach_remove(kp_state->bad_exes, true_func, NULL);
 }
 

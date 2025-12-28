@@ -316,7 +316,7 @@ cmd_promote(const char *app_name)
         printf("Resolved '%s' to '%s'\n", app_name, final_name);
     }
 
-    if (add_to_config_file("/etc/preheat.d/apps.list", final_name) != 0)
+    if (add_to_config_file(SYSCONFDIR "/preheat.d/apps.list", final_name) != 0)
         return 1;
 
     printf("Promoted '%s' to priority pool\n", final_name);
@@ -350,7 +350,7 @@ cmd_demote(const char *app_name)
         printf("Resolved '%s' to '%s'\n", app_name, final_name);
     }
 
-    if (add_to_config_file("/etc/preheat.d/blacklist", final_name) != 0)
+    if (add_to_config_file(SYSCONFDIR "/preheat.d/blacklist", final_name) != 0)
         return 1;
 
     printf("Demoted '%s' to observation pool\n", final_name);
@@ -376,8 +376,8 @@ cmd_reset(const char *app_name)
         return 1;
     }
 
-    remove_from_config_file("/etc/preheat.d/apps.list", app_name);
-    remove_from_config_file("/etc/preheat.d/blacklist", app_name);
+    remove_from_config_file(SYSCONFDIR "/preheat.d/apps.list", app_name);
+    remove_from_config_file(SYSCONFDIR "/preheat.d/blacklist", app_name);
 
     printf("Reset '%s' to automatic classification\n", app_name);
     

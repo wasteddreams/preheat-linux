@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <limits.h>
 #include <linux/limits.h>
+#include <sys/stat.h>
+#include <libgen.h>
 
 #include "ctl_config.h"
 
@@ -101,6 +103,21 @@ add_to_config_file(const char *filepath, const char *entry)
     if (found) {
         printf("Entry already exists: %s\n", entry);
         return 0;
+    }
+
+    /* Create parent directory if it doesn't exist */
+    char *path_copy = strdup(filepath);
+    if (path_copy) {
+        char *dir = dirname(path_copy);
+        if (access(dir, F_OK) != 0) {
+            if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+                fprintf(stderr, "Error: Cannot create directory %s: %s\n", dir, strerror(errno));
+                fprintf(stderr, "Hint: Try with sudo\n");
+                free(path_copy);
+                return 1;
+            }
+        }
+        free(path_copy);
     }
 
     /* Append entry */

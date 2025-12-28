@@ -318,10 +318,17 @@ kp_proc_foreach(GHFunc func, gpointer user_data)
                         
                         if (len > 0) {
                             exe_buffer[len] = '\0';
-                            /* Only use first arg (before first null) */
-                            char *null_pos = memchr(exe_buffer, '\0', len);
-                            if (null_pos && null_pos != exe_buffer) {
-                                /* Got the executable path from cmdline */
+                            
+                            /* Find first null OR space - cmdline uses null but
+                             * some systems/wrappers may use spaces */
+                            char *end = exe_buffer;
+                            while (*end && *end != ' ' && *end != '\t' && (end - exe_buffer) < len) {
+                                end++;
+                            }
+                            *end = '\0';  /* Truncate at first delimiter */
+                            
+                            /* Only proceed if we got a valid path starting with / */
+                            if (exe_buffer[0] == '/') {
                                 g_message("SNAP WORKAROUND: Using cmdline for pid=%d: %s", pid, exe_buffer);
                                 goto process_exe;  /* Skip to processing */
                             }

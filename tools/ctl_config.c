@@ -23,7 +23,6 @@
 #include <limits.h>
 #include <linux/limits.h>
 #include <sys/stat.h>
-#include <libgen.h>
 
 #include "ctl_config.h"
 
@@ -106,18 +105,21 @@ add_to_config_file(const char *filepath, const char *entry)
     }
 
     /* Create parent directory if it doesn't exist */
-    char *path_copy = strdup(filepath);
-    if (path_copy) {
-        char *dir = dirname(path_copy);
+    char dir[PATH_MAX];
+    strncpy(dir, filepath, sizeof(dir) - 1);
+    dir[sizeof(dir) - 1] = '\0';
+    
+    /* Find last slash to get directory */
+    char *last_slash = strrchr(dir, '/');
+    if (last_slash && last_slash != dir) {
+        *last_slash = '\0';  /* Truncate to get directory path */
         if (access(dir, F_OK) != 0) {
             if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
                 fprintf(stderr, "Error: Cannot create directory %s: %s\n", dir, strerror(errno));
                 fprintf(stderr, "Hint: Try with sudo\n");
-                free(path_copy);
                 return 1;
             }
         }
-        free(path_copy);
     }
 
     /* Append entry */

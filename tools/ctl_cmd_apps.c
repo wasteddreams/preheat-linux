@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <limits.h>
+#include <linux/limits.h>
 #include <libgen.h>
 #include <glib.h>
 

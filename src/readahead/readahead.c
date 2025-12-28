@@ -250,18 +250,21 @@ process_file(const char *path, size_t offset, size_t length)
         wait_for_children();
 
     if (maxprocs > 0) {
-        /* Parallel reading */
+        /* B005 FIX: Increment procs BEFORE fork to prevent race.
+         * If SIGTERM arrives between fork and procs++, child could be orphaned.
+         * By incrementing first, wait_for_children() will always wait for it. */
+        procs++;
         int status = fork();
 
         if (status == -1) {
-            /* Ignore error, return */
+            /* Fork failed - decrement counter and return */
+            procs--;
             return;
         }
 
         /* Return immediately in the parent */
         if (status > 0) {
-            procs++;
-            return;
+            return;  /* procs already incremented */
         }
     }
 

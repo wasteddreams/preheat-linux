@@ -654,6 +654,7 @@ kp_stats_get_app_hit_rate(const char *app_path)
 
 /**
  * Free statistics resources
+ * B011 FIX: Ensure all hash tables are freed
  */
 void
 kp_stats_free(void)
@@ -666,6 +667,12 @@ kp_stats_free(void)
     if (stats.app_preloaded) {
         g_hash_table_destroy(stats.app_preloaded);
         stats.app_preloaded = NULL;
+    }
+
+    /* B011 FIX: Also free app_pools */
+    if (stats.app_pools) {
+        g_hash_table_destroy(stats.app_pools);
+        stats.app_pools = NULL;
     }
 
     stats.initialized = FALSE;

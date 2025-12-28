@@ -341,8 +341,9 @@ kp_seed_from_browser_profiles(void)
     return seeded;
 }
 
-/* Seed common developer tools */
-static int
+/* Seed common developer tools
+ * NOTE: Currently disabled - most dev tools are CLI without .desktop files */
+static int __attribute__((unused))
 kp_seed_from_dev_tools(void)
 {
     const char *dev_tools[] = {

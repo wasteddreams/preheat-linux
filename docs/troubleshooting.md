@@ -180,6 +180,40 @@ exeprefix = /usr/;/opt/;!/    # Include more paths
 
 ---
 
+### Problem: Snap/Docker/Firejail apps not tracked ⚠️
+
+**Symptom:** Apps installed via snap or run in containers/sandboxes show "NOT TRACKED".
+
+```bash
+$ preheat-ctl explain firefox
+Status: ❌ NOT TRACKED
+```
+
+**Cause:** Security sandboxes (Snap, Docker, Firejail) block daemon access to `/proc/PID/exe`.
+
+**Verification:**
+```bash
+# Check if Firefox is a snap
+which firefox
+# Output: /snap/bin/firefox → Snap!
+
+# The daemon sees this:
+$ sudo readlink /proc/$(pgrep -n firefox)/exe
+readlink: permission denied  # Blocked by AppArmor!
+```
+
+**This is a known limitation.** See [Known Limitations](known-limitations.md#4-sandboxed-applications-not-fully-supported-️).
+
+**Workaround:**
+- Install apps via `apt` instead of snap:
+  ```bash
+  sudo snap remove firefox
+  sudo add-apt-repository ppa:mozillateam/ppa
+  sudo apt update && sudo apt install firefox
+  ```
+- Use AppImage versions (no sandbox)
+- Accept that sandboxed apps won't be preloaded
+
 ### Problem: State file errors
 
 **Symptom:**

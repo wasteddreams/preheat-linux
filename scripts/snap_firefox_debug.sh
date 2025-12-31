@@ -90,36 +90,64 @@ echo ""
 echo -e "${BLUE}[Phase 3] /proc Access Tests (Root Cause Verification)${NC}"
 echo "$SUBDIV"
 
-for PID in $MAIN_PID; do
+# Test ALL Firefox PIDs (oldest first - these are more stable parent processes)
+ALL_PIDS=$(pgrep firefox 2>/dev/null | sort -n | head -5)
+echo -e "Testing PIDs (oldest first): $ALL_PIDS"
+echo ""
+
+for PID in $ALL_PIDS; do
+    # Check if process still exists
+    if [[ ! -d "/proc/$PID" ]]; then
+        echo -e "${YELLOW}PID $PID: Process exited (transient child)${NC}"
+        continue
+    fi
+    
     echo -e "${CYAN}Testing PID: $PID${NC}"
     
     # Test /proc/PID/exe
     echo -n "  /proc/$PID/exe: "
-    if EXE_PATH=$(readlink "/proc/$PID/exe" 2>&1); then
-        echo -e "${GREEN}✓ Readable: $EXE_PATH${NC}"
+    if [[ -e "/proc/$PID/exe" ]]; then
+        if EXE_PATH=$(readlink "/proc/$PID/exe" 2>&1); then
+            echo -e "${GREEN}✓ Readable: $EXE_PATH${NC}"
+        else
+            echo -e "${RED}✗ BLOCKED (Permission denied)${NC}"
+        fi
     else
-        echo -e "${RED}✗ BLOCKED: $EXE_PATH${NC}"
+        echo -e "${YELLOW}⚠ Process exited${NC}"
+        continue
     fi
     
     # Test /proc/PID/cmdline
     echo -n "  /proc/$PID/cmdline: "
-    if CMDLINE=$(cat "/proc/$PID/cmdline" 2>/dev/null | tr '\0' ' ' | cut -c1-80); then
-        echo -e "${GREEN}✓ Readable: ${CMDLINE}${NC}"
+    if [[ -f "/proc/$PID/cmdline" ]]; then
+        if CMDLINE=$(cat "/proc/$PID/cmdline" 2>/dev/null | tr '\0' ' ' | cut -c1-80); then
+            if [[ -n "$CMDLINE" ]]; then
+                echo -e "${GREEN}✓ Readable: ${CMDLINE}${NC}"
+            else
+                echo -e "${YELLOW}⚠ Empty (kernel thread?)${NC}"
+            fi
+        else
+            echo -e "${RED}✗ BLOCKED${NC}"
+        fi
     else
-        echo -e "${RED}✗ BLOCKED${NC}"
+        echo -e "${YELLOW}⚠ Process exited${NC}"
     fi
     
     # Test /proc/PID/maps (This is the critical one!)
     echo -n "  /proc/$PID/maps: "
-    if MAPS_COUNT=$(wc -l < "/proc/$PID/maps" 2>/dev/null); then
-        echo -e "${GREEN}✓ Readable: $MAPS_COUNT lines${NC}"
+    if [[ -f "/proc/$PID/maps" ]]; then
+        if MAPS_COUNT=$(wc -l < "/proc/$PID/maps" 2>/dev/null); then
+            echo -e "${GREEN}✓ Readable: $MAPS_COUNT lines${NC}"
+        else
+            echo -e "${RED}✗ BLOCKED (AppArmor likely preventing access)${NC}"
+        fi
     else
-        echo -e "${RED}✗ BLOCKED (AppArmor likely preventing access)${NC}"
+        echo -e "${RED}✗ File not accessible (AppArmor sandbox)${NC}"
     fi
     
     # Test /proc/PID/stat  
     echo -n "  /proc/$PID/stat: "
-    if cat "/proc/$PID/stat" &>/dev/null; then
+    if [[ -f "/proc/$PID/stat" ]] && cat "/proc/$PID/stat" &>/dev/null; then
         echo -e "${GREEN}✓ Readable${NC}"
     else
         echo -e "${RED}✗ BLOCKED${NC}"
@@ -127,7 +155,7 @@ for PID in $MAIN_PID; do
     
     # Test /proc/PID/status
     echo -n "  /proc/$PID/status: "
-    if cat "/proc/$PID/status" &>/dev/null; then
+    if [[ -f "/proc/$PID/status" ]] && cat "/proc/$PID/status" &>/dev/null; then
         echo -e "${GREEN}✓ Readable${NC}"
     else
         echo -e "${RED}✗ BLOCKED${NC}"

@@ -153,20 +153,40 @@ for app in "${SNAP_APPS[@]}"; do
     for i in $(seq 1 $LAUNCHES_PER_APP); do
         echo -n "  Launch $i/$LAUNCHES_PER_APP... "
         
-        # Launch the app
-        sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/$app &>/dev/null &
+        # Kill any existing instances first to get a clean start
+        killall -9 -q "$app" 2>/dev/null || true
+        sleep 2
+        
+        # Launch the app with options to suppress crash dialogs
+        case "$app" in
+            firefox)
+                # --new-instance prevents reuse, about:blank avoids loading
+                sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/firefox --new-instance --no-remote about:blank &>/dev/null &
+                ;;
+            thunderbird)
+                # Similar approach for Thunderbird
+                sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/thunderbird --new-instance &>/dev/null &
+                ;;
+            *)
+                # Generic launch for other apps
+                sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/$app &>/dev/null &
+                ;;
+        esac
         
         sleep $WAIT_AFTER_LAUNCH
         
-        # Kill the app gracefully
+        # Kill the app gracefully first
         killall -q "$app" 2>/dev/null || true
-        sleep 1
+        sleep 2
+        
+        # Force kill if still running
         killall -9 -q "$app" 2>/dev/null || true
+        sleep 3  # Extra time for cleanup
         
         echo "done"
         
         if [[ $i -lt $LAUNCHES_PER_APP ]]; then
-            sleep 5  # Short wait between same-app launches
+            sleep 8  # Longer wait between same-app launches
         fi
     done
     

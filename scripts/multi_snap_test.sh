@@ -4,7 +4,8 @@
 # Tests preheat daemon's ability to track and count launches for multiple snap apps
 #
 
-set -e
+# Don't exit on errors - we handle them gracefully
+# set -e
 
 # Colors
 RED='\033[0;31m'
@@ -246,11 +247,20 @@ echo "$DIV"
 
 for app in "${SNAP_APPS[@]}"; do
     path="${APP_PATHS[$app]}"
-    initial=${APP_INITIAL[$app]}
+    initial="${APP_INITIAL[$app]:-0}"
     
-    # Get final count
-    final=$(preheat-ctl explain "$path" 2>&1 | grep "Raw Launches:" | awk '{print $3}' || echo "0")
+    # Get final count (script runs as root, so no sudo needed)
+    final=$(preheat-ctl explain "$path" 2>&1 | grep "Raw Launches:" | awk '{print $3}' 2>/dev/null || echo "0")
     final=${final:-0}
+    
+    # Handle non-numeric values
+    if ! [[ "$final" =~ ^[0-9]+$ ]]; then
+        final=0
+    fi
+    if ! [[ "$initial" =~ ^[0-9]+$ ]]; then
+        initial=0
+    fi
+    
     APP_FINAL[$app]=$final
     
     delta=$((final - initial))

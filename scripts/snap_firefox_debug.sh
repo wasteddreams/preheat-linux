@@ -66,9 +66,11 @@ echo -e "${BLUE}Initial Firefox State:${NC}"
 if preheat-ctl explain "$SNAP_PATH" 2>&1 | grep -q "NOT TRACKED"; then
     echo -e "${YELLOW}  Firefox is NOT yet tracked${NC}"
     INITIAL_STATE="NOT_TRACKED"
+    INITIAL_LAUNCHES=0
 else
     INITIAL_POOL=$(preheat-ctl explain "$SNAP_PATH" 2>&1 | grep "Pool:" | awk '{print $2}')
     INITIAL_LAUNCHES=$(preheat-ctl explain "$SNAP_PATH" 2>&1 | grep "Raw Launches:" | awk '{print $3}')
+    INITIAL_LAUNCHES=${INITIAL_LAUNCHES:-0}
     echo "  Pool: $INITIAL_POOL"
     echo "  Raw Launches: $INITIAL_LAUNCHES"
     INITIAL_STATE="TRACKED"
@@ -189,13 +191,18 @@ else
     POOL_PASS=false
 fi
 
-# Launch count check
+# Launch count check - verify delta
 echo -n "Launch Tracking: "
-if [[ -n "$FINAL_LAUNCHES" ]] && [[ "$FINAL_LAUNCHES" -ge 1 ]]; then
-    echo -e "${GREEN}✓ PASS ($FINAL_LAUNCHES launches recorded)${NC}"
+FINAL_LAUNCHES=${FINAL_LAUNCHES:-0}
+LAUNCH_DELTA=$((FINAL_LAUNCHES - INITIAL_LAUNCHES))
+if [[ "$LAUNCH_DELTA" -ge "$LAUNCH_COUNT" ]]; then
+    echo -e "${GREEN}✓ PASS (delta: +$LAUNCH_DELTA launches, $INITIAL_LAUNCHES → $FINAL_LAUNCHES)${NC}"
+    LAUNCH_PASS=true
+elif [[ "$LAUNCH_DELTA" -gt 0 ]]; then
+    echo -e "${YELLOW}⚠ PARTIAL ($LAUNCH_DELTA/$LAUNCH_COUNT launches detected, $INITIAL_LAUNCHES → $FINAL_LAUNCHES)${NC}"
     LAUNCH_PASS=true
 else
-    echo -e "${RED}✗ FAIL (launches not recorded)${NC}"
+    echo -e "${RED}✗ FAIL (no increment: $INITIAL_LAUNCHES → $FINAL_LAUNCHES)${NC}"
     LAUNCH_PASS=false
 fi
 
@@ -219,7 +226,7 @@ if [[ "$POOL_PASS" == "true" && "$LAUNCH_PASS" == "true" ]]; then
     echo ""
     echo "Snap Firefox is correctly tracked by preheat daemon."
     echo "  Pool: $FINAL_POOL"
-    echo "  Raw Launches: $FINAL_LAUNCHES"
+    echo "  Raw Launches: $INITIAL_LAUNCHES → $FINAL_LAUNCHES (+$LAUNCH_DELTA)"
     echo "  Weighted: $FINAL_WEIGHTED"
     exit 0
 else

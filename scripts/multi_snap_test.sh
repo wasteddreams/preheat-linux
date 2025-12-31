@@ -153,40 +153,55 @@ for app in "${SNAP_APPS[@]}"; do
     for i in $(seq 1 $LAUNCHES_PER_APP); do
         echo -n "  Launch $i/$LAUNCHES_PER_APP... "
         
-        # Kill any existing instances first to get a clean start
+        # THOROUGHLY kill any existing instances first
+        # Kill by process name patterns (covers all snap helper processes)
+        pkill -9 -f "snap.*$app" 2>/dev/null || true
+        pkill -9 -f "/snap/$app" 2>/dev/null || true
+        pkill -9 -f "${app}_${app}" 2>/dev/null || true  # snap uses appname_appname pattern
         killall -9 -q "$app" 2>/dev/null || true
-        sleep 2
+        killall -9 -q "${app}.real" 2>/dev/null || true
         
-        # Launch the app with options to suppress crash dialogs
+        # Wait for processes to fully terminate
+        sleep 5
+        
+        # Launch the app
         case "$app" in
             firefox)
-                # --new-instance prevents reuse, about:blank avoids loading
                 sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/firefox --new-instance --no-remote about:blank &>/dev/null &
                 ;;
             thunderbird)
-                # Similar approach for Thunderbird
                 sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/thunderbird --new-instance &>/dev/null &
                 ;;
             *)
-                # Generic launch for other apps
                 sudo -u "$REAL_USER" DISPLAY=:${DISPLAY_NUM} /snap/bin/$app &>/dev/null &
                 ;;
         esac
         
+        # Wait for app to fully start and run
         sleep $WAIT_AFTER_LAUNCH
         
-        # Kill the app gracefully first
-        killall -q "$app" 2>/dev/null || true
-        sleep 2
+        # GRACEFUL shutdown first with SIGTERM
+        pkill -15 -f "snap.*$app" 2>/dev/null || true
+        pkill -15 -f "/snap/$app" 2>/dev/null || true
+        killall -15 -q "$app" 2>/dev/null || true
         
-        # Force kill if still running
+        # Wait for graceful shutdown
+        sleep 5
+        
+        # Force kill anything remaining with SIGKILL
+        pkill -9 -f "snap.*$app" 2>/dev/null || true
+        pkill -9 -f "/snap/$app" 2>/dev/null || true
+        pkill -9 -f "${app}_${app}" 2>/dev/null || true
         killall -9 -q "$app" 2>/dev/null || true
-        sleep 3  # Extra time for cleanup
+        
+        # Extra wait for cleanup
+        sleep 5
         
         echo "done"
         
         if [[ $i -lt $LAUNCHES_PER_APP ]]; then
-            sleep 8  # Longer wait between same-app launches
+            echo "    Waiting 15s before next launch..."
+            sleep 15
         fi
     done
     

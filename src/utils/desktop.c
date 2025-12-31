@@ -296,6 +296,9 @@ kp_desktop_init(void)
     scan_desktop_dir("/usr/share/applications");
     scan_desktop_dir("/usr/local/share/applications");
 
+    /* Scan snap desktop files (Ubuntu/snapd) */
+    scan_desktop_dir("/var/lib/snapd/desktop/applications");
+
     /* Scan user directory */
     home = g_get_home_dir();
     if (home) {

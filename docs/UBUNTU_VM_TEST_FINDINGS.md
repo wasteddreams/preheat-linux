@@ -87,6 +87,62 @@ cycle = 90
 
 ## Next Steps
 
-1. [ ] Fix desktop.c snap path matching
+1. [x] Fix desktop.c snap path matching ✅ DONE
 2. [ ] Add /etc/preheat.d to install targets
-3. [ ] Update SNAP_FIREFOX_DEBUG_NOTES.md with Ubuntu-specific findings
+3. [x] Update SNAP_FIREFOX_DEBUG_NOTES.md with Ubuntu-specific findings ✅ DONE
+
+---
+
+## Resolution: December 31, 2025
+
+### 🎉 Snap Firefox Now in Priority Pool
+
+All desktop.c fixes have been implemented and tested:
+
+1. **Scan snap desktop directory:** `/var/lib/snapd/desktop/applications/`
+2. **Handle `env VAR=value` prefix:** Skip environment variables in Exec= lines
+3. **Snap wrapper resolution:** Check `/snap/bin/X` BEFORE `realpath()` to avoid resolving to `/usr/bin/snap`
+4. **Pattern-based binary finding:** Try `/snap/<name>/current/usr/lib/<name>/<name>` etc.
+
+### Test Results
+
+```
+Desktop scanner initialized: discovered 43 GUI applications
+Reclassified /snap/firefox/6565/usr/lib/firefox/firefox: observation → priority (reason: .desktop (Firefox))
+
+preheat-ctl explain /snap/firefox/6565/usr/lib/firefox/firefox:
+  Pool:    priority
+  Status:  ✅ In priority pool
+```
+
+### Long Test Output
+
+```
+=============================================
+              TEST SUMMARY
+=============================================
+
+Pool Classification: ✓ PASS (priority pool)
+Launch Tracking: ✓ PASS (1 launches recorded)
+
+=============================================
+          ALL TESTS PASSED!
+=============================================
+```
+
+### Outstanding Issue: Launch Counting
+
+Firefox raw launches don't increment despite 5 launches in testing. This appears to be caused by persistent snap helper processes (PIDs remain across Firefox restarts) that make the daemon think Firefox is "still running" rather than newly launched.
+
+This is a **separate issue** from desktop path matching and requires investigation in `spy.c` and the PID tracking logic.
+
+### Key Learnings
+
+| Issue | Kali Linux | Ubuntu 24.04 |
+|-------|------------|--------------|
+| `/proc/PID/maps` access | Blocked by AppArmor | Allowed for root |
+| Desktop file matching | N/A (maps blocked) | Was the root cause |
+| `.desktop` location | Standard XDG | `/var/lib/snapd/desktop/applications/` |
+| Exec= format | Standard | Uses `env BAMF_DESKTOP_FILE_HINT=...` prefix |
+| `/snap/bin/X` type | Symlink to `/usr/bin/snap` | Same |
+

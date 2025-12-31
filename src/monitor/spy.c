@@ -51,6 +51,7 @@
 #include "../config/config.h"
 #include "../state/state.h"
 #include "../daemon/stats.h"
+#include "../utils/desktop.h"
 #include "proc.h"
 #include <math.h>
 
@@ -259,6 +260,21 @@ track_process_start(kp_exe_t *exe, pid_t pid, pid_t parent_pid)
     proc_info->start_time = now;
     proc_info->last_weight_update = now;
     proc_info->user_initiated = is_user_initiated(parent_pid);
+    
+    /* FALLBACK for snap/flatpak/container apps:
+     * Only triggers when is_user_initiated() returned FALSE.
+     * If exe has a .desktop file, it's a real GUI app launched by user.
+     * This handles snap-confine, bwrap, and other container parent processes
+     * that aren't in our shell/terminal/desktop whitelist.
+     * 
+     * For apt-installed apps, is_user_initiated() already returns TRUE
+     * when launched from terminal/desktop, so this fallback never runs.
+     */
+    if (!proc_info->user_initiated && kp_desktop_has_file(exe->path)) {
+        proc_info->user_initiated = TRUE;
+        g_debug("Desktop app fallback: %s (pid %d, parent was container)",
+                exe->path, pid);
+    }
     
     /* Only increment raw launch count for user-initiated processes.
      * This avoids counting child processes (e.g., Firefox content processes)

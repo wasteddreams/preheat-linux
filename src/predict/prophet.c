@@ -61,6 +61,7 @@
 #include "../state/state.h"
 #include "../monitor/proc.h"
 #include "../readahead/readahead.h"
+#include "../daemon/stats.h"
 
 #include <math.h>
 
@@ -293,6 +294,47 @@ exemap_bid_in_maps_wrapper(gpointer exemap, gpointer exe, gpointer user_data)
  * Input is the list of maps sorted on the need.
  * Decide a cutoff based on memory conditions and readahead.
  */
+/**
+ * Track which exes had maps preloaded for hit/miss statistics
+ * Called after readahead to record preload times at the exe level.
+ */
+static void
+record_preloaded_exes(kp_map_t **maps, int count)
+{
+    GHashTable *recorded = g_hash_table_new(g_str_hash, g_str_equal);
+    
+    for (int i = 0; i < count; i++) {
+        const char *map_path = maps[i]->path;
+        
+        /* Find all exes that use this map */
+        GHashTableIter iter;
+        gpointer key, value;
+        g_hash_table_iter_init(&iter, kp_state->exes);
+        while (g_hash_table_iter_next(&iter, &key, &value)) {
+            kp_exe_t *exe = (kp_exe_t *)value;
+            
+            /* Check if this exe uses this map via exemaps (GSet = GPtrArray) */
+            for (guint j = 0; j < exe->exemaps->len; j++) {
+                kp_exemap_t *exemap = g_ptr_array_index(exe->exemaps, j);
+                if (exemap && exemap->map && exemap->map->path && 
+                    strcmp(exemap->map->path, map_path) == 0) {
+                    /* Record this exe as preloaded (only once per exe) */
+                    if (!g_hash_table_contains(recorded, exe->path)) {
+                        kp_stats_record_preload(exe->path);
+                        g_hash_table_insert(recorded, (gpointer)exe->path, 
+                                          GINT_TO_POINTER(1));
+                        g_debug("Recorded preload for exe: %s (via map %s)",
+                                exe->path, map_path);
+                    }
+                    break;  /* Found match, no need to check more exemaps */
+                }
+            }
+        }
+    }
+    
+    g_hash_table_destroy(recorded);
+}
+
 void
 kp_prophet_readahead(GPtrArray *maps_arr)
 {
@@ -334,6 +376,9 @@ kp_prophet_readahead(GPtrArray *maps_arr)
             memavailtotal, memavailtotal - memavail);
 
     if (i) {
+        /* Record preloaded exes BEFORE calling readahead for hit tracking */
+        record_preloaded_exes((kp_map_t **)maps_arr->pdata, i);
+        
         i = kp_readahead((kp_map_t **)maps_arr->pdata, i);
         g_debug("readahead %d files", i);
     } else {

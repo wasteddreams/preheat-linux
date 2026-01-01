@@ -48,7 +48,9 @@ preheat_SOURCES = \
 	utils/desktop.c \
 	utils/desktop.h \
 	utils/seeding.c \
-	utils/seeding.h
+	utils/seeding.h \
+	utils/lib_scanner.c \
+	utils/lib_scanner.h
 
 preheat_CPPFLAGS = \
 	-I$(top_srcdir)/include \

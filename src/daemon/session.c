@@ -44,6 +44,7 @@
 #include "common.h"
 #include "session.h"
 #include "../utils/logging.h"
+#include "../utils/lib_scanner.h"
 #include "../config/config.h"
 #include "../state/state.h"
 #include "../predict/prophet.h"
@@ -58,36 +59,25 @@
 #define SESSION_MEMORY_THRESHOLD 20   /* 20% minimum free */
 
 /**
- * Load memory maps for a session app that has none (lazy loading)
- * Creates a single map covering the entire binary file.
+ * Load a single file as a map for an exe
  */
 static gboolean
-load_maps_for_session_app(kp_exe_t *exe)
+load_single_map(kp_exe_t *exe, const char *path)
 {
     struct stat st;
     kp_map_t *map;
     kp_exemap_t *exemap;
     
-    if (!exe || !exe->path)
+    if (stat(path, &st) < 0)
         return FALSE;
     
-    /* Check if file exists and get size */
-    if (stat(exe->path, &st) < 0) {
-        g_debug("Session: cannot stat %s: %s", exe->path, strerror(errno));
+    if ((size_t)st.st_size < (size_t)kp_conf->model.minsize)
         return FALSE;
-    }
     
-    /* Skip small files */
-    if ((size_t)st.st_size < (size_t)kp_conf->model.minsize) {
-        return FALSE;
-    }
-    
-    /* Create single map for entire file */
-    map = kp_map_new(exe->path, 0, st.st_size);
+    map = kp_map_new(path, 0, st.st_size);
     if (!map)
         return FALSE;
     
-    /* Create exemap and add to exe */
     exemap = kp_exe_map_new(exe, map);
     if (!exemap) {
         kp_map_free(map);
@@ -95,10 +85,49 @@ load_maps_for_session_app(kp_exe_t *exe)
     }
     
     exemap->prob = 1.0;
-    exe->size = st.st_size;
+    exe->size += st.st_size;
     
-    g_debug("Session: loaded map for %s (%zu bytes)", exe->path, (size_t)st.st_size);
     return TRUE;
+}
+
+/**
+ * Load memory maps for a session app including shared libraries
+ */
+static gboolean
+load_maps_for_session_app(kp_exe_t *exe)
+{
+    char **libs;
+    int loaded = 0;
+    
+    if (!exe || !exe->path)
+        return FALSE;
+    
+    exe->size = 0;  /* Reset size counter */
+    
+    /* Load main binary */
+    if (load_single_map(exe, exe->path)) {
+        loaded++;
+        g_debug("Session: loaded binary %s", exe->path);
+    }
+    
+    /* Scan and load shared libraries */
+    libs = kp_scan_libraries(exe->path);
+    if (libs) {
+        for (int i = 0; libs[i]; i++) {
+            if (load_single_map(exe, libs[i])) {
+                loaded++;
+            }
+        }
+        kp_free_library_list(libs);
+    }
+    
+    if (loaded > 0) {
+        g_message("Session: loaded %d maps for %s (%.1f MB total)",
+                  loaded, exe->path, (double)exe->size / (1024 * 1024));
+        return TRUE;
+    }
+    
+    return FALSE;
 }
 
 /* Global session state */

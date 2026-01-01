@@ -139,3 +139,4 @@ docs/SNAP_FIREFOX_DEBUG_NOTES.md
 docs/SNAP_FIREFOX_ROOT_CAUSE_ANALYSIS.md
 test_pid_persistence.sh
 tests/
+scripts/benchmark.sh

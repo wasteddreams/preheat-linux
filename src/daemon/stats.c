@@ -163,6 +163,10 @@ kp_stats_reclassify_all(void)
 
 /**
  * Extract basename from path
+ * 
+ * WARNING: Returns pointer to static buffer. NOT thread-safe.
+ * Callers MUST copy result (e.g., via g_strdup) before next call.
+ * Safe in glib main loop since all calls are sequential.
  */
 static const char *
 get_app_name(const char *path)
@@ -175,8 +179,7 @@ get_app_name(const char *path)
 
     path_copy = g_strdup(path);
     base = basename(path_copy);
-    strncpy(name_buf, base, sizeof(name_buf) - 1);
-    name_buf[sizeof(name_buf) - 1] = '\0';
+    g_strlcpy(name_buf, base, sizeof(name_buf));  /* BUG FIX: safer than strncpy */
     g_free(path_copy);
 
     return name_buf;
@@ -573,10 +576,10 @@ kp_stats_get_summary(kp_stats_summary_t *summary)
         g_free((gchar *)ac->name);
     }
 
+    guint sorted_len = sorted->len;  /* BUG 1 FIX: Save before freeing */
     g_array_free(sorted, TRUE);
     
-    g_debug("Stats summary: %u priority pool apps in top list",
-              sorted->len);
+    g_debug("Stats summary: %u priority pool apps in top list", sorted_len);
 }
 
 /**
@@ -723,4 +726,70 @@ kp_stats_free(void)
     }
 
     stats.initialized = FALSE;
+}
+
+/**
+ * Save preload timestamps to state file
+ * Writes: PRELOAD_TIMES <count>
+ *         PRELOAD <app_name> <timestamp>
+ */
+static void
+write_preload_time(gpointer key, gpointer value, gpointer user_data)
+{
+    const char *app_name = (const char *)key;
+    time_t timestamp = (time_t)GPOINTER_TO_SIZE(value);
+    GIOChannel *channel = (GIOChannel *)user_data;
+    gchar *line;
+    
+    line = g_strdup_printf("PRELOAD\t%s\t%ld\n", app_name, (long)timestamp);
+    g_io_channel_write_chars(channel, line, -1, NULL, NULL);
+    g_free(line);
+}
+
+void
+kp_stats_save_preload_times(GIOChannel *channel)
+{
+    gchar *header;
+    guint count;
+    
+    if (!stats.initialized || !stats.preload_times || !channel) return;
+    
+    count = g_hash_table_size(stats.preload_times);
+    if (count == 0) return;
+    
+    /* Write header */
+    header = g_strdup_printf("PRELOAD_TIMES\t%u\n", count);
+    g_io_channel_write_chars(channel, header, -1, NULL, NULL);
+    g_free(header);
+    
+    /* Write each preload time */
+    g_hash_table_foreach(stats.preload_times, write_preload_time, channel);
+    
+    g_debug("Saved %u preload timestamps to state file", count);
+}
+
+/**
+ * Load a preload timestamp from state file
+ */
+void
+kp_stats_load_preload_time(const char *app_name, time_t timestamp)
+{
+    time_t now, elapsed;
+    
+    if (!stats.initialized || !stats.preload_times || !app_name) return;
+    
+    /* Only load if within sliding window */
+    now = time(NULL);
+    elapsed = now - timestamp;
+    
+    if (elapsed < 0) elapsed = 0;  /* Clock skew */
+    
+    if (elapsed < stats.hitstats_window) {
+        g_hash_table_replace(stats.preload_times, g_strdup(app_name), 
+                            GSIZE_TO_POINTER((gsize)timestamp));
+        g_debug("Loaded preload time for %s (age: %ld sec)", app_name, (long)elapsed);
+    } else {
+        g_debug("Skipped stale preload time for %s (age: %ld sec > window %d)",
+                app_name, (long)elapsed, stats.hitstats_window);
+    }
 }

@@ -87,7 +87,7 @@ cmd_explain(const char *app_name)
                     last_seen = update_time;
                     first_seen = seq;
                     total_runtime = run_time;
-                    strcpy(pool_str, pool_val == 0 ? "priority" : "observation");
+                    strcpy(pool_str, pool_val == 1 ? "priority" : "observation");  /* BUG 1 FIX */
                     break;
                 }
             }
@@ -418,7 +418,7 @@ cmd_show_hidden(void)
             if (sscanf(line, "EXE\t%d\t%d\t%d\t%d\t%d\t%lf\t%lu\t%lu\t%511s",
                        &seq, &update_time, &run_time, &expansion, &pool,
                        &weighted_launches, &raw_launches, &total_duration, path) >= 9) {
-                if (pool == 1) {
+                if (pool == 0) {  /* Observation pool */
                     const char *display_path = path;
                     if (strncmp(path, "file://", 7) == 0) display_path = path + 7;
                     printf("  %s\n", display_path);

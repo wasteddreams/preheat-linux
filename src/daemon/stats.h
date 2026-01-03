@@ -114,6 +114,19 @@ int kp_stats_dump_to_file(const char *path);
 void kp_stats_free(void);
 
 /**
+ * Save preload timestamps to state file
+ * @param channel File channel to write to
+ */
+void kp_stats_save_preload_times(GIOChannel *channel);
+
+/**
+ * Load preload timestamps from state file
+ * @param app_name Application name (basename)
+ * @param timestamp When app was preloaded
+ */
+void kp_stats_load_preload_time(const char *app_name, time_t timestamp);
+
+/**
  * Reclassify all loaded applications
  * Should be called after state load to apply updated classification logic
  */

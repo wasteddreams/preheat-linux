@@ -117,8 +117,8 @@ kp_family_update_stats(kp_app_family_t *family)
             family->total_weighted_launches += exe->weighted_launches;
             family->total_raw_launches += exe->raw_launches;
             
-            /* Track most recent usage */
-            if (exe->running_timestamp > (int)family->last_used) {
+            /* Track most recent usage - BUG 4 FIX: proper time_t comparison */
+            if ((time_t)exe->running_timestamp > family->last_used) {
                 family->last_used = exe->running_timestamp;
             }
         }

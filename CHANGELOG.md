@@ -5,6 +5,39 @@ All notable changes to Preheat will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-01-03
+
+### 🛡️ Security Audit (2026-01-02)
+
+#### Critical Fix
+- **L-1**: Fixed command injection in `lib_scanner.c` - malicious filenames could execute shell commands via popen
+
+#### High Severity
+- **F-1**: Fixed use-after-free in `stats.c` when accessing freed GArray
+
+#### Medium Severity  
+- **M-1/M-3**: Fixed Markov chain timestamp and assertion bugs
+- **F-2/F-3**: Fixed app family init order and duplicate handling
+- **L-2**: Fixed integer overflow in `/proc/PID/maps` parsing
+- **SS-1**: Fixed smart seeding clobbering prior data
+
+#### Low Severity
+- **M-4/M-5/M-6**: Fixed division by zero, integer overflow, memory leak in Markov
+- **F-4**: Fixed time_t truncation in family stats
+- **L-3/L-4/L-5**: Fixed memory leak, buffer init, sign mismatch in proc.c
+- **S-1**: Fixed format specifier for size_t in state I/O
+- **HM-1**: Replaced strncpy with safer g_strlcpy in stats
+- **C-1/C-2**: Fixed pool value and path in CLI tools
+
+**Total: 19 bugs fixed (1 critical, 1 high, 6 medium, 11 low)**
+
+### 🔍 Code Audit Fixes (2026-01-03)
+
+- **CLI-1**: Fixed `show-hidden` command showing priority pool instead of observation pool (`pool == 1` → `pool == 0`)
+- **SEC-1**: Use absolute path `/usr/bin/ldd` in lib_scanner for defense-in-depth
+
+---
+
 ## [1.0.0] - 2025-12-25
 
 ### 🎉 Initial Stable Release

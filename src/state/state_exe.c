@@ -189,8 +189,10 @@ kp_state_register_exe(kp_exe_t *exe, gboolean create_markovs)
 
     exe->seq = ++(kp_state->exe_seq);
     
-    /* B012 FIX: Only create Markov chains when exe count is manageable */
-    if (create_markovs && g_hash_table_size(kp_state->exes) < MAX_MARKOV_EXES) {
+    /* B012 REVISED: Only create Markov chains for PRIORITY pool apps.
+     * Observation pool apps (grep, find, etc.) don't need prediction.
+     * This limits memory to ~(priority_count)² chains instead of O(n²). */
+    if (create_markovs && exe->pool == POOL_PRIORITY) {
         g_hash_table_foreach(kp_state->exes, shift_kp_markov_new_wrapper, exe);
     }
     g_hash_table_insert(kp_state->exes, exe->path, exe);

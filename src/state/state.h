@@ -163,7 +163,7 @@ typedef struct _kp_exe_t
 typedef struct _kp_markov_t
 {
     kp_exe_t *a, *b;            /* Involved exes */
-    int time;                   /* Total time both exes have been running simultaneously (state 3) */
+    int64_t time;               /* BUG 5 FIX: 64-bit to prevent overflow after extended uptime */
     double time_to_leave[4];    /* Mean time to leave each state */
     int weight[4][4];           /* Number of times we've gone from state i to state j.
                                  * weight[i][i] is the number of times we have left
@@ -293,6 +293,7 @@ void kp_markov_free(kp_markov_t *markov, kp_exe_t *from);
 void kp_markov_state_changed(kp_markov_t *markov);
 double kp_markov_correlation(kp_markov_t *markov);
 void kp_markov_foreach(GFunc func, gpointer user_data);
+void kp_markov_build_priority_mesh(void);  /* Build chains between all priority apps */
 
 /* Exe management functions */
 kp_exe_t * kp_exe_new(const char *path, gboolean running, GSet *exemaps);

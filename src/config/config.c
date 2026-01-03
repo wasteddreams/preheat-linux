@@ -874,6 +874,12 @@ load_families_from_config(GKeyFile *keyfile)
     
     if (!keyfile) return;
     
+    /* BUG 2 FIX: Guard against NULL state during early startup */
+    if (!kp_state->app_families) {
+        g_debug("Deferring family loading - state not initialized");
+        return;
+    }
+    
     keys = g_key_file_get_keys(keyfile, "families", &num_keys, &error);
     if (!keys) {
         if (error && error->code != G_KEY_FILE_ERROR_GROUP_NOT_FOUND) {

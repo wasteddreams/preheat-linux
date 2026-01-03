@@ -429,8 +429,8 @@ kp_session_preload_top_apps(int max_apps)
     for (guint i = 0; i < top_apps->len; i++) {
         kp_exe_t *exe = g_ptr_array_index(top_apps, i);
 
-        /* Load maps if not already loaded (seeded apps don't have maps) */
-        if (g_set_size(exe->exemaps) == 0) {
+        /* Load maps if size is too small (maps may be stale/empty from state file) */
+        if (exe->size < (size_t)kp_conf->model.minsize) {
             if (load_maps_for_session_app(exe)) {
                 maps_loaded++;
             }

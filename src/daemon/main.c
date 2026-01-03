@@ -56,16 +56,20 @@
 #include "signals.h"
 #include "session.h"
 #include "stats.h"
+#include "../state/state.h"
 
 #include <getopt.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <string.h>     /* For strcspn() */
+#include <sys/file.h>   /* For flock() */
 
 /* Default file paths */
 #define DEFAULT_CONFFILE SYSCONFDIR "/" PACKAGE ".conf"
 #define DEFAULT_STATEFILE PKGLOCALSTATEDIR "/" PACKAGE ".state"
 #define DEFAULT_LOGFILE LOGDIR "/" PACKAGE ".log"
+#define DEFAULT_PIDFILE "/var/run/" PACKAGE ".pid"
 #define DEFAULT_NICELEVEL 15
 
 /* Global variables (accessed by other modules) */
@@ -213,6 +217,82 @@ is_process_running(const char *process_name)
 }
 
 /**
+ * Acquire exclusive lock on PID file to ensure single instance
+ * 
+ * @param pidfile Path to PID file (e.g., /var/run/preheat.pid)
+ * @return File descriptor (keep open for duration of daemon), or -1 on failure
+ * 
+ * The lock is automatically released when the process exits or the fd is closed.
+ * If another instance is running, flock() will fail with EWOULDBLOCK.
+ */
+static int pidfile_fd = -1;  /* Global to keep lock held for daemon lifetime */
+
+static gboolean
+acquire_pidfile_lock(const char *pidfile)
+{
+    pidfile_fd = open(pidfile, O_RDWR | O_CREAT, 0644);
+    if (pidfile_fd < 0) {
+        /* Try /run as fallback (some systems use /run instead of /var/run) */
+        if (errno == EACCES || errno == ENOENT) {
+            g_warning("Cannot open PID file %s: %s (continuing without lock)", 
+                      pidfile, strerror(errno));
+            return TRUE;  /* Allow startup without lock on permission issues */
+        }
+        return FALSE;
+    }
+    
+    /* Try exclusive non-blocking lock */
+    if (flock(pidfile_fd, LOCK_EX | LOCK_NB) < 0) {
+        if (errno == EWOULDBLOCK) {
+            /* Another instance is running */
+            char buf[32] = {0};
+            ssize_t n = read(pidfile_fd, buf, sizeof(buf) - 1);
+            if (n > 0) {
+                /* Trim trailing whitespace/newline */
+                while (n > 0 && (buf[n-1] == '\n' || buf[n-1] == '\r' || buf[n-1] == ' ')) {
+                    buf[--n] = '\0';
+                }
+                fprintf(stderr, "Error: Another instance is already running (PID: %s)\n", buf);
+            } else {
+                fprintf(stderr, "Error: Another instance is already running\n");
+            }
+            close(pidfile_fd);
+            pidfile_fd = -1;
+            return FALSE;
+        }
+        /* Other flock errors - log but continue */
+        g_warning("flock() failed: %s (continuing)", strerror(errno));
+    }
+    
+    /* Write our PID to the file */
+    if (ftruncate(pidfile_fd, 0) == 0) {
+        char pidbuf[32];
+        int len = snprintf(pidbuf, sizeof(pidbuf), "%d\n", getpid());
+        if (write(pidfile_fd, pidbuf, len) < 0) {
+            g_warning("Failed to write PID file: %s", strerror(errno));
+        }
+    }
+    
+    /* Keep fd open - lock is held until process exits */
+    g_debug("PID file lock acquired: %s", pidfile);
+    return TRUE;
+}
+
+/**
+ * Release PID file lock and remove the file
+ */
+static void
+release_pidfile_lock(void)
+{
+    if (pidfile_fd >= 0) {
+        close(pidfile_fd);
+        pidfile_fd = -1;
+        unlink(DEFAULT_PIDFILE);  /* Clean up PID file */
+        g_debug("PID file lock released");
+    }
+}
+
+/**
  * Run self-diagnostics
  * Checks system requirements without starting daemon
  */
@@ -344,6 +424,12 @@ main(int argc, char **argv)
 
     kp_log_init(logfile);
 
+    /* Acquire PID file lock - ensures single instance */
+    if (!acquire_pidfile_lock(DEFAULT_PIDFILE)) {
+        g_critical("Cannot start: another instance is already running");
+        return EXIT_FAILURE;
+    }
+
     /* Load configuration */
     kp_config_load(conffile, TRUE);
 
@@ -375,8 +461,15 @@ main(int argc, char **argv)
     /* Reclassify all loaded apps (fixes cached pool values) */
     kp_stats_reclassify_all();
 
+    /* Build Markov chains between priority apps (needed for prediction) */
+    kp_markov_build_priority_mesh();
+
     /* Register manual apps that aren't already tracked */
     kp_state_register_manual_apps();
+
+    /* Save state immediately so preheat-ctl commands work right away */
+    kp_state->dirty = TRUE;  /* Ensure save actually writes */
+    kp_state_save(statefile);
 
     g_message("%s %s started", PACKAGE, VERSION);
 
@@ -386,6 +479,9 @@ main(int argc, char **argv)
     /* Clean up */
     kp_state_save(statefile);
     kp_state_free();
+
+    /* Release PID file lock */
+    release_pidfile_lock();
 
     g_debug("exiting");
     return EXIT_SUCCESS;

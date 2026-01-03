@@ -66,7 +66,7 @@ kp_markov_new(kp_exe_t *a, kp_exe_t *b, gboolean initialize)
             if (a->change_timestamp < kp_state->time)
                 markov->change_timestamp = a->change_timestamp;
             if (b->change_timestamp < kp_state->time && b->change_timestamp > markov->change_timestamp)
-                markov->change_timestamp = a->change_timestamp;
+                markov->change_timestamp = b->change_timestamp;  /* BUG 1 FIX: was incorrectly using a->change_timestamp */
             if (a->change_timestamp > markov->change_timestamp)
                 markov->state ^= 1;
             if (b->change_timestamp > markov->change_timestamp)
@@ -79,6 +79,11 @@ kp_markov_new(kp_exe_t *a, kp_exe_t *b, gboolean initialize)
         kp_markov_state_changed(markov);
     }
 
+    /* BUG 6 FIX: Check markov sets exist before adding */
+    if (!a->markovs || !b->markovs) {
+        g_slice_free(kp_markov_t, markov);
+        return NULL;
+    }
     g_set_add(a->markovs, markov);
     g_set_add(b->markovs, markov);
     return markov;
@@ -99,7 +104,9 @@ kp_markov_state_changed(kp_markov_t *markov)
     old_state = markov->state;
     new_state = markov_state(markov);
 
-    g_return_if_fail(old_state != new_state);
+    /* BUG 3 FIX: Gracefully handle race condition instead of crashing */
+    if (old_state == new_state)
+        return;
 
     markov->weight[old_state][old_state]++;
     markov->time_to_leave[old_state] += ((kp_state->time - markov->change_timestamp)
@@ -216,9 +223,80 @@ kp_markov_correlation(kp_markov_t *markov)
     else {
         numerator = ((double)t*ab) - ((double)a * b);
         denominator2 = ((double)a * b) * ((double)(t - a) * (t - b));
-        correlation = numerator / sqrt(denominator2);
+        
+        /* BUG 4 FIX: Guard against negative/zero denominator from overflow */
+        if (denominator2 <= 0) {
+            correlation = 0;
+        } else {
+            correlation = numerator / sqrt(denominator2);
+            /* Clamp to valid range instead of asserting */
+            if (correlation > 1.0) correlation = 1.0;
+            if (correlation < -1.0) correlation = -1.0;
+        }
     }
 
-    g_assert(fabs(correlation) <= 1.00001);
     return correlation;
+}
+
+/**
+ * Build Markov chains between all priority pool exes
+ * Should be called AFTER seeding completes to create the full mesh.
+ * 
+ * This creates chains between all pairs of priority apps that don't 
+ * already have chains. O(n²) for n priority apps but n is typically small.
+ */
+void
+kp_markov_build_priority_mesh(void)
+{
+    GHashTableIter iter_a, iter_b;
+    gpointer key_a, val_a, key_b, val_b;
+    int chains_created = 0;
+    int priority_count = 0;
+    
+    if (!kp_state || !kp_state->exes) return;
+    
+    /* First count priority apps */
+    g_hash_table_iter_init(&iter_a, kp_state->exes);
+    while (g_hash_table_iter_next(&iter_a, &key_a, &val_a)) {
+        kp_exe_t *exe = (kp_exe_t *)val_a;
+        if (exe->pool == POOL_PRIORITY) priority_count++;
+    }
+    
+    g_message("Building Markov mesh for %d priority apps...", priority_count);
+    
+    /* Create chains between all pairs of priority apps */
+    g_hash_table_iter_init(&iter_a, kp_state->exes);
+    while (g_hash_table_iter_next(&iter_a, &key_a, &val_a)) {
+        kp_exe_t *exe_a = (kp_exe_t *)val_a;
+        
+        if (exe_a->pool != POOL_PRIORITY) continue;
+        
+        g_hash_table_iter_init(&iter_b, kp_state->exes);
+        while (g_hash_table_iter_next(&iter_b, &key_b, &val_b)) {
+            kp_exe_t *exe_b = (kp_exe_t *)val_b;
+            
+            if (exe_b->pool != POOL_PRIORITY) continue;
+            if (exe_a == exe_b) continue;
+            if (exe_a->seq > exe_b->seq) continue;  /* Only create once per pair */
+            
+            /* Check if chain already exists by scanning exe_a's markovs */
+            gboolean exists = FALSE;
+            for (guint i = 0; i < g_set_size(exe_a->markovs); i++) {
+                kp_markov_t *m = g_ptr_array_index(exe_a->markovs, i);
+                if ((m->a == exe_a && m->b == exe_b) || 
+                    (m->a == exe_b && m->b == exe_a)) {
+                    exists = TRUE;
+                    break;
+                }
+            }
+            
+            if (!exists) {
+                kp_markov_new(exe_a, exe_b, TRUE);
+                chains_created++;
+            }
+        }
+    }
+    
+    g_message("Markov mesh built: %d chains created for %d priority apps", 
+              chains_created, priority_count);
 }

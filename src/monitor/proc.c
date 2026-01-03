@@ -180,9 +180,6 @@ kp_proc_get_maps(pid_t pid, GHashTable *maps, GSet **exemaps)
     size_t size = 0;
     char buffer[1024];
 
-    if (exemaps)
-        *exemaps = g_set_new();
-
     g_snprintf(name, sizeof(name) - 1, "/proc/%d/maps", pid);
     in = fopen(name, "r");
     if (!in) {
@@ -191,16 +188,25 @@ kp_proc_get_maps(pid_t pid, GHashTable *maps, GSet **exemaps)
         return 0;
     }
 
+    /* BUG 3 FIX: Allocate exemaps AFTER fopen success to avoid leak */
+    if (exemaps)
+        *exemaps = g_set_new();
+
     while (fgets(buffer, sizeof(buffer) - 1, in)) {
         char file[FILELEN];
         unsigned long start, end, offset;
-        long length;
+        size_t length;  /* BUG 5 FIX: Use size_t for unsigned subtraction result */
         int count;
 
+        file[0] = '\0';  /* BUG 4 FIX: Initialize buffer */
         count = sscanf(buffer, "%lx-%lx %*15s %lx %*x:%*x %*u %"FILELENSTR"s",
                        &start, &end, &offset, file);
 
         if (count != 4 || !sanitize_file(file) || !accept_file(file, kp_conf->system.mapprefix))
+            continue;
+
+        /* BUG 2 FIX: Validate address range */
+        if (end <= start)
             continue;
 
         length = end - start;

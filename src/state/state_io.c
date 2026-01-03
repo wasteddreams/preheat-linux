@@ -36,6 +36,7 @@
 #include "../utils/crc32.h"
 #include "../config/config.h"
 #include "../monitor/proc.h"
+#include "../daemon/stats.h"
 #include "state.h"
 #include "state_io.h"
 
@@ -60,6 +61,8 @@
 #define TAG_MARKOV      "MARKOV"
 #define TAG_FAMILY      "FAMILY"
 #define TAG_CRC32       "CRC32"
+#define TAG_PRELOAD_TIMES "PRELOAD_TIMES"  /* Preload timestamps section */
+#define TAG_PRELOAD_TIME  "PRELOAD"        /* Individual preload timestamp */
 
 #define READ_TAG_ERROR              "invalid tag"
 #define READ_SYNTAX_ERROR           "invalid syntax"
@@ -352,7 +355,8 @@ read_exemap(read_context_t *rc)
 static void
 read_markov(read_context_t *rc)
 {
-    int time, state, state_new;
+    long long time;  /* BUG 5 FIX: 64-bit compatible */
+    int state, state_new;
     int ia, ib;
     kp_exe_t *a, *b;
     kp_markov_t *markov;
@@ -361,7 +365,7 @@ read_markov(read_context_t *rc)
     /* Parse header: exe_a_seq exe_b_seq time */
     n = 0;
     if (3 > sscanf(rc->line,
-                   "%d %d %d%n",
+                   "%d %d %lld%n",
                    &ia, &ib, &time, &n)) {
         rc->errmsg = READ_SYNTAX_ERROR;
         return;
@@ -456,6 +460,12 @@ read_family(read_context_t *rc)
         member_token = strtok_r(NULL, ";", &saveptr);
     }
     
+    /* BUG 3 FIX: Check for duplicate family IDs */
+    if (g_hash_table_contains(kp_state->app_families, family_id)) {
+        g_debug("Family '%s' already exists, skipping duplicate", family_id);
+        kp_family_free(family);
+        return;
+    }
     g_hash_table_insert(kp_state->app_families, g_strdup(family_id), family);
 }
 
@@ -647,6 +657,18 @@ kp_state_read_from_channel(GIOChannel *f)
         else if (!strcmp(tag, TAG_MARKOV)) read_markov(&rc);
         else if (!strcmp(tag, TAG_FAMILY)) read_family(&rc);
         else if (!strcmp(tag, TAG_CRC32))  read_crc32(&rc);
+        else if (!strcmp(tag, TAG_PRELOAD_TIMES)) {
+            /* Just a header, count is informational */
+            g_debug("Reading preload timestamps section");
+        }
+        else if (!strcmp(tag, TAG_PRELOAD_TIME) && lineno > 1) {
+            /* PRELOAD <app_name> <timestamp> - but only NOT on line 1 (header uses PRELOAD too) */
+            char app_name[256];
+            long timestamp;
+            if (sscanf(rc.line, "%255s\t%ld", app_name, &timestamp) == 2) {
+                kp_stats_load_preload_time(app_name, (time_t)timestamp);
+            }
+        }
         else if (linebuf->str[0] && linebuf->str[0] != '#' && !isspace((unsigned char)linebuf->str[0])) {
             /* Unknown tag (ignoring whitespace-prefixed lines - they're subsections) */
             rc.errmsg = READ_TAG_ERROR;
@@ -718,8 +740,8 @@ write_map(kp_map_t *map, gpointer G_GNUC_UNUSED data, write_context_t *wc)
 
     write_tag(TAG_MAP);
     g_string_printf(wc->line,
-                    "%d\t%d\t%lu\t%lu\t%d\t%s",
-                    map->seq, map->update_time, (long)map->offset, (long)map->length, -1, uri);
+                    "%d\t%d\t%zu\t%zu\t%d\t%s",  /* BUG 1 FIX: use %zu for size_t */
+                    map->seq, map->update_time, map->offset, map->length, -1, uri);
     write_string(wc->line);
     write_ln();
 
@@ -835,7 +857,7 @@ write_markov(kp_markov_t *markov, write_context_t *wc)
     int state, state_new;
 
     write_tag(TAG_MARKOV);
-    g_string_printf(wc->line, "%d\t%d\t%d", markov->a->seq, markov->b->seq, markov->time);
+    g_string_printf(wc->line, "%d\t%d\t%lld", markov->a->seq, markov->b->seq, (long long)markov->time);  /* BUG 5 FIX: 64-bit */
     write_string(wc->line);
 
     for (state = 0; state < 4; state++) {
@@ -945,6 +967,7 @@ kp_state_write_to_channel(GIOChannel *f, int fd)
     if (!wc.err) kp_exemap_foreach(write_exemap_wrapper, &wc);
     if (!wc.err) kp_markov_foreach(write_markov_wrapper, &wc);
     if (!wc.err) g_hash_table_foreach(kp_state->app_families, write_family_wrapper, &wc);
+    if (!wc.err) kp_stats_save_preload_times(f);  /* Save preload timestamps */
 
     if (!wc.err) {
         g_io_channel_flush(f, &wc.err);

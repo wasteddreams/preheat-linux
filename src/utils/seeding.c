@@ -72,7 +72,7 @@ kp_seed_from_xdg_recent(void)
             if (!exe) {
                 exe = kp_exe_new(app_path, FALSE, NULL);
                 exe->pool = POOL_PRIORITY;  /* Recently used = priority */
-                kp_state_register_exe(exe, FALSE);
+                kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
             }
             
             exe->weighted_launches += score;
@@ -188,7 +188,7 @@ kp_seed_from_desktop_times(void)
             if (!exe) {
                 exe = kp_exe_new(full_path,FALSE, NULL);
                 exe->pool = POOL_PRIORITY;  /* Desktop apps = priority */
-                kp_state_register_exe(exe, FALSE);
+                kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
             }
             
             exe->weighted_launches += score;
@@ -268,13 +268,14 @@ kp_seed_from_shell_history(void)
                 continue;  /* Skip CLI tools like grep, ls, exec-in-shell */
             }
             exe = kp_exe_new(full_path, FALSE, NULL);
-            exe->pool = POOL_PRIORITY;  /* Desktop apps are user-initiated */
-            kp_state_register_exe(exe, FALSE);
+            exe->pool = POOL_PRIORITY;  /* Desktop apps are us  er-initiated */
+            kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
         }
         
         /* Score: sqrt to prevent domination by very frequent commands */
-        exe->weighted_launches = sqrt((double)count);
-        exe->raw_launches = count;
+        /* BUG FIX: Use += to accumulate, not = which clobbers prior seeding */
+        exe->weighted_launches += sqrt((double)count);
+        exe->raw_launches += count;
         seeded++;
     }
     
@@ -321,7 +322,7 @@ kp_seed_from_browser_profiles(void)
                     if (!exe) {
                         exe = kp_exe_new(browsers[i].binary_path, FALSE, NULL);
                         exe->pool = POOL_PRIORITY;
-                        kp_state_register_exe(exe, FALSE);
+                        kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
                     }
                     
                     /* Score based on recency: 10.0 * exp(-days/15) */
@@ -368,7 +369,7 @@ kp_seed_from_dev_tools(void)
                 if (!exe) {
                     exe = kp_exe_new(dev_tools[i], FALSE, NULL);
                     exe->pool = POOL_PRIORITY;
-                    kp_state_register_exe(exe, FALSE);
+                    kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
                 }
                 
                 /* Fixed score for dev tools */
@@ -452,11 +453,12 @@ kp_seed_from_system_patterns(void)
                 if (!exe) {
                     exe = kp_exe_new(gnome_apps[i], FALSE, NULL);
                     exe->pool = POOL_PRIORITY;
-                    kp_state_register_exe(exe, FALSE);
-                    exe->weighted_launches = 3.0;
-                    exe->raw_launches = 1;
-                    seeded++;
+                    kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
                 }
+                /* BUG FIX: Use += to accumulate, not = which clobbers prior data */
+                exe->weighted_launches += 3.0;
+                exe->raw_launches += 1;
+                seeded++;
             }
         }
     }
@@ -476,11 +478,12 @@ kp_seed_from_system_patterns(void)
                 if (!exe) {
                     exe = kp_exe_new(kde_apps[i], FALSE, NULL);
                     exe->pool = POOL_PRIORITY;
-                    kp_state_register_exe(exe, FALSE);
-                    exe->weighted_launches = 3.0;
-                    exe->raw_launches = 1;
-                    seeded++;
+                    kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
                 }
+                /* BUG FIX: Use += to accumulate */
+                exe->weighted_launches += 3.0;
+                exe->raw_launches += 1;
+                seeded++;
             }
         }
     }
@@ -499,11 +502,12 @@ kp_seed_from_system_patterns(void)
                 if (!exe) {
                     exe = kp_exe_new(xfce_apps[i], FALSE, NULL);
                     exe->pool = POOL_PRIORITY;
-                    kp_state_register_exe(exe, FALSE);
-                    exe->weighted_launches = 3.0;
-                    exe->raw_launches = 1;
-                    seeded++;
+                    kp_state_register_exe(exe, exe->pool == POOL_PRIORITY);
                 }
+                /* BUG FIX: Use += to accumulate */
+                exe->weighted_launches += 3.0;
+                exe->raw_launches += 1;
+                seeded++;
             }
         }
     }

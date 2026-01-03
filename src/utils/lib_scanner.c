@@ -85,7 +85,10 @@ kp_scan_libraries(const char *exe_path)
     libs = g_ptr_array_new();
     
     /* Phase 1: Use ldd for ELF-linked dependencies */
-    snprintf(cmd, sizeof(cmd), "ldd '%s' 2>/dev/null", exe_path);
+    /* BUG 1 FIX: Use g_shell_quote to prevent command injection */
+    gchar *quoted_path = g_shell_quote(exe_path);
+    snprintf(cmd, sizeof(cmd), "/usr/bin/ldd %s 2>/dev/null", quoted_path);
+    g_free(quoted_path);
     
     fp = popen(cmd, "r");
     if (fp) {

@@ -359,7 +359,7 @@ cmd_health(void)
     else issues++;
     
     struct stat st;
-    if (stat("/var/lib/preheat/preheat.state", &st) == 0) {
+    if (stat("/usr/local/var/lib/preheat/preheat.state", &st) == 0) {  /* BUG 2 FIX */
         time_t now = time(NULL);
         time_t age_minutes = (now - st.st_mtime) / 60;
         if (age_minutes < 60) health_score += 10;

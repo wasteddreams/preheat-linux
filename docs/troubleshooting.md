@@ -85,44 +85,47 @@ sudo cp /path/to/preheat-linux/config/preheat.conf.default \
     /usr/local/etc/preheat.conf
 ```
 
----
-
 ### Problem: Another instance running
 
-**Symptom:**
+**Symptom (v1.0.1+):**
 ```
-PID file exists: /run/preheat.pid
+Error: Another instance is already running (PID: 1234)
 ```
 
-**Cause:** Stale PID file from crashed daemon or another instance.
+**Cause:** The daemon uses `flock()` on the PID file to ensure only one instance runs at a time.
 
 **Solution:**
 ```bash
 # Check if actually running
 ps aux | grep preheat
 
-# If not running, remove stale PID file
-sudo rm /run/preheat.pid
+# If running, stop it first
+sudo systemctl stop preheat
+
+# If not running but error persists, the lock auto-releases
+# Just start normally
 sudo systemctl start preheat
 ```
 
+> **Note (v1.0.1):** Unlike v1.0.0, you no longer need to manually delete the PID file. The `flock()` lock is automatically released when the process exits, even after a crash.
+
 ---
 
-### Problem: Address already in use
+### Problem: Address already in use (Legacy v1.0.0)
 
-**Symptom:** Daemon starts but exits immediately.
+**Symptom:** Daemon starts but exits immediately with stale PID file error.
 
-**Cause:** Previous instance didn't clean up properly.
+**Cause:** Previous instance didn't clean up properly (pre-v1.0.1 behavior).
 
-**Solution:**
+**Solution (if upgrading from v1.0.0):**
 ```bash
 # Kill any remaining processes
 sudo pkill preheat
 
-# Remove PID file
+# Remove stale PID file (only needed once after upgrade)
 sudo rm -f /run/preheat.pid
 
-# Start fresh
+# Start fresh - v1.0.1 handles this automatically going forward
 sudo systemctl start preheat
 ```
 

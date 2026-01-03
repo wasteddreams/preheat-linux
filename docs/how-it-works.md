@@ -404,8 +404,8 @@ Preheat detects when you log in and enters an aggressive preload mode:
 
 ```
 Login detected (/run/user/$UID exists)
-         │
-         ▼
+                 │
+                 ▼
 ┌─────────────────────────────────────┐
 │      3-MINUTE BOOT WINDOW           │
 │                                     │
@@ -415,9 +415,9 @@ Login detected (/run/user/$UID exists)
 │  • Only if ≥20% memory available    │
 │                                     │
 └─────────────────────────────────────┘
-         │
-         ▼
-    Normal prediction resumes
+                 │
+                 ▼
+       Normal prediction resumes
 ```
 
 This ensures your daily applications are warm in cache the moment you need them.

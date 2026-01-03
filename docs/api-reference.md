@@ -628,7 +628,7 @@ sudo preheat -f
 ```
 [Mon Dec 15 10:00:00 2024] loading configuration from /usr/local/etc/preheat.conf
 [Mon Dec 15 10:00:00 2024] loading state from /usr/local/var/lib/preheat/preheat.state
-[Mon Dec 15 10:00:00 2024] preheat 1.0.0 started
+[Mon Dec 15 10:00:00 2024] preheat 1.0.1 started
 ```
 
 **Periodic scan:**

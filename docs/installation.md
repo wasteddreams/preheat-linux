@@ -130,7 +130,7 @@ preheat --version
 
 Expected output:
 ```
-preheat 1.0.0
+preheat 1.0.1
 Adaptive readahead daemon for Debian-based distributions
 ```
 

@@ -7,34 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.1] - 2026-01-03
 
-### 🛡️ Security Audit (2026-01-02)
+### 🛡️ Security Fixes
 
-#### Critical Fix
-- **L-1**: Fixed command injection in `lib_scanner.c` - malicious filenames could execute shell commands via popen
+#### Critical: Command Injection Vulnerability (L-1)
+- **File:** `src/utils/lib_scanner.c`
+- **Impact:** Malicious filenames containing shell metacharacters (`;`, `$()`, backticks) could execute arbitrary commands when the daemon invoked `ldd` via `popen()`
+- **Fix:** All executable paths are now escaped using `g_shell_quote()` before passing to shell
+- **Additional Hardening:** `ldd` is now invoked via absolute path `/usr/bin/ldd` to prevent PATH manipulation attacks
+
+### 🐛 Bug Fixes
 
 #### High Severity
-- **F-1**: Fixed use-after-free in `stats.c` when accessing freed GArray
 
-#### Medium Severity  
-- **M-1/M-3**: Fixed Markov chain timestamp and assertion bugs
-- **F-2/F-3**: Fixed app family init order and duplicate handling
-- **L-2**: Fixed integer overflow in `/proc/PID/maps` parsing
-- **SS-1**: Fixed smart seeding clobbering prior data
+**F-1: Use-After-Free in Statistics Module**
+- **File:** `src/daemon/stats.c:578`
+- **Issue:** Accessed `sorted->len` after calling `g_array_free(sorted, TRUE)`
+- **Fix:** Save array length to local variable before freeing
+
+#### Medium Severity
+
+**M-1: Wrong Timestamp in Markov Chain Initialization**
+- **File:** `src/state/state_markov.c:69`
+- **Issue:** Used `a->change_timestamp` instead of `b->change_timestamp`, causing incorrect chain timing
+- **Fix:** Now correctly uses the timestamp from executable B
+
+**M-3: Assertion Crash on Same-State Transition**
+- **File:** `src/state/state_markov.c:108`
+- **Issue:** `g_assert(old_state != new_state)` crashed when rapid process start/stop caused same-state transitions
+- **Fix:** Gracefully return instead of asserting
+
+**F-2: App Families Loaded Before State Initialization**
+- **File:** `src/config/config.c`
+- **Issue:** Family configuration parsed before state structures were initialized
+- **Fix:** Reordered initialization sequence in `main.c`
+
+**F-3: Duplicate Family IDs Caused Memory Leak**
+- **File:** `src/state/state_io.c:463`
+- **Issue:** Loading duplicate family IDs from state file leaked the duplicate
+- **Fix:** Check for existing family before inserting, free duplicate if found
+
+**L-2: Integer Overflow in /proc Maps Parsing**
+- **File:** `src/monitor/proc.c:209`
+- **Issue:** If `end < start` in `/proc/PID/maps`, subtraction overflowed to huge value
+- **Fix:** Validate `end > start` before calculating length
+
+**SS-1: Smart Seeding Clobbered Prior Data**
+- **Files:** `src/utils/seeding.c` (8 locations)
+- **Issue:** Used `exe->weighted_launches = score` instead of `+=`, resetting scores from earlier seeding sources
+- **Fix:** Changed all 8 assignments to use `+=` for proper accumulation
+
+**MC-1/MC-2: Markov Chains Not Created After Seeding**
+- **Files:** `src/state/state_markov.c`, `src/state/state_exe.c`
+- **Issue:** B012 limit + FALSE passed to `kp_state_register_exe()` during seeding meant no Markov chains were ever created for seeded apps
+- **Fix:** Added `kp_markov_build_priority_mesh()` function that builds chains between all priority pool apps after seeding completes
+
+**SP-1: Session Preload Skipped Map Loading**
+- **File:** `src/daemon/session.c:433`
+- **Issue:** Checked if `exemaps` was empty instead of checking if `size` was below minimum
+- **Fix:** Changed condition to check `exe->size < kp_conf->model.minsize`
 
 #### Low Severity
-- **M-4/M-5/M-6**: Fixed division by zero, integer overflow, memory leak in Markov
-- **F-4**: Fixed time_t truncation in family stats
-- **L-3/L-4/L-5**: Fixed memory leak, buffer init, sign mismatch in proc.c
-- **S-1**: Fixed format specifier for size_t in state I/O
-- **HM-1**: Replaced strncpy with safer g_strlcpy in stats
-- **C-1/C-2**: Fixed pool value and path in CLI tools
 
-**Total: 19 bugs fixed (1 critical, 1 high, 6 medium, 11 low)**
+**M-4: Division by Zero in Markov Correlation**
+- **File:** `src/state/state_markov.c:228`
+- **Fix:** Guard against zero/negative denominator, return neutral correlation
 
-### 🔍 Code Audit Fixes (2026-01-03)
+**M-5: Integer Overflow After Extended Uptime**
+- **File:** `src/state/state.h:166`
+- **Issue:** `int time` field would overflow after ~2 years of continuous uptime
+- **Fix:** Changed to `int64_t` for effectively unlimited range
 
-- **CLI-1**: Fixed `show-hidden` command showing priority pool instead of observation pool (`pool == 1` → `pool == 0`)
-- **SEC-1**: Use absolute path `/usr/bin/ldd` in lib_scanner for defense-in-depth
+**M-6: Memory Leak on OOM During Markov Creation**
+- **File:** `src/state/state_markov.c:82`
+- **Fix:** Free allocated markov struct if sets are NULL
+
+**L-3/L-4/L-5: Memory Safety in /proc Parsing**
+- **File:** `src/monitor/proc.c`
+- L-3: Memory leak when `fopen()` fails (moved allocation after success check)
+- L-4: Uninitialized buffer (added `file[0] = '\0'`)
+- L-5: Sign mismatch in length calculation (changed to `size_t`)
+
+**S-1: Format Specifier Mismatch**
+- **File:** `src/state/state_io.c`
+- **Issue:** Used `%d` for `size_t` values
+- **Fix:** Use `%zu` format specifier
+
+**HM-1: Unsafe String Copy**
+- **File:** `src/daemon/stats.c`
+- **Fix:** Replaced `strncpy` with `g_strlcpy` for guaranteed null-termination
+
+**C-1/C-2: CLI Tool Bugs**
+- C-1: Pool value display inverted in `explain` output
+- C-2: Wrong state file path in `health` command
+
+**CLI-1: show-hidden Showed Wrong Pool**
+- **File:** `tools/ctl_cmd_apps.c:421`
+- **Issue:** Checked `pool == 1` (priority) but function is for observation pool
+- **Fix:** Changed to `pool == 0`
+
+### ✨ New Features
+
+**SI-1: Single-Instance Protection**
+- **File:** `src/daemon/main.c`
+- **Feature:** Daemon now uses `flock()` on `/var/run/preheat.pid` to prevent multiple instances
+- **Behavior:** Second instance immediately exits with clear error message showing existing PID
+
+### 📊 Summary
+
+| Severity | Count |
+|----------|-------|
+| Critical | 1 |
+| High | 1 |
+| Medium | 8 |
+| Low | 11 |
+| **Total** | **21 bugs fixed** |
 
 ---
 

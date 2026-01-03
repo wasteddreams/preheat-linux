@@ -48,7 +48,7 @@ preheat-ctl status
 
 ---
 
-## Features (v1.0.0)
+## Features (v1.0.1)
 
 | Feature | Description |
 |---------|-------------|
@@ -57,6 +57,7 @@ preheat-ctl status
 | Smart seeding | Immediate value from XDG/shell history |
 | Pool management | `promote`, `demote`, `show-hidden`, `reset` |
 | Health checks | `health`, `explain`, `stats --verbose` |
+| Single-instance | PID file locking prevents duplicate daemons |
 
 ---
 
@@ -119,10 +120,11 @@ Preheat is stable for daily use and actively tested on Kali and Debian-based sys
 
 ## Documentation
 
-| | |
-|---|---|
+| Getting Started | Reference |
+|-----------------|-----------|
 | [Installation](docs/installation.md) | [Configuration](docs/configuration.md) |
-| [API Reference](docs/api-reference.md) | [Troubleshooting](docs/troubleshooting.md) |
+| [Quick Start](docs/quick-start.md) | [API Reference](docs/api-reference.md) |
+| [How It Works](docs/how-it-works.md) | [Troubleshooting](docs/troubleshooting.md) |
 
 ---
 

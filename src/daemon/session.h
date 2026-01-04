@@ -39,10 +39,17 @@ gboolean kp_session_in_boot_window(void);
 int kp_session_window_remaining(void);
 
 /**
- * Trigger aggressive preload of top N apps
+ * Trigger aggressive preload of top N apps (includes map loading)
  * @param max_apps Maximum apps to preload
  */
 void kp_session_preload_top_apps(int max_apps);
+
+/**
+ * Boost top N apps with high priority lnprob for prediction
+ * Called from kp_prophet_predict() during boot window
+ * @param max_apps Maximum apps to boost
+ */
+void kp_session_boost_top_apps(int max_apps);
 
 /**
  * Free session resources

@@ -54,7 +54,7 @@
 #include <pwd.h>
 
 /* Session detection settings */
-#define SESSION_WINDOW_DEFAULT 180    /* 3 minutes */
+#define SESSION_WINDOW_DEFAULT 300    /* 5 minutes */
 #define SESSION_MAX_APPS_DEFAULT 5
 #define SESSION_MEMORY_THRESHOLD 20   /* 20% minimum free */
 
@@ -414,7 +414,6 @@ void
 kp_session_preload_top_apps(int max_apps)
 {
     GPtrArray *top_apps;
-    int preloaded = 0;
     int maps_loaded = 0;
 
     if (!check_memory_available()) {
@@ -423,8 +422,6 @@ kp_session_preload_top_apps(int max_apps)
     }
 
     top_apps = get_top_apps(max_apps);
-
-    g_message("Session preload: boosting top %d applications", top_apps->len);
 
     for (guint i = 0; i < top_apps->len; i++) {
         kp_exe_t *exe = g_ptr_array_index(top_apps, i);
@@ -435,20 +432,53 @@ kp_session_preload_top_apps(int max_apps)
                 maps_loaded++;
             }
         }
-
-        /* Give strong negative lnprob to trigger immediate preload */
-        exe->lnprob = -15.0;  /* Very high priority */
-        preloaded++;
-
-        g_debug("Session preload: boosting %s (usage: %d sec, maps: %u)",
-                exe->path, exe->time, g_set_size(exe->exemaps));
+        
+        /* NOTE: lnprob boost is now done by kp_session_boost_top_apps()
+         * which is called from kp_prophet_predict() AFTER exe_zero_prob_wrapper() */
     }
 
     g_ptr_array_free(top_apps, TRUE);
 
-    if (preloaded > 0) {
-        g_message("Session preload: %d apps boosted (%d maps loaded)", 
-                  preloaded, maps_loaded);
+    if (maps_loaded > 0) {
+        g_message("Session preload: loaded maps for %d apps", maps_loaded);
+    }
+}
+
+/**
+ * Boost top N apps with high priority lnprob for prediction
+ * Called from kp_prophet_predict() during boot window.
+ * Unlike kp_session_preload_top_apps(), this ONLY sets lnprob;
+ * it doesn't load maps (that's done separately on first call).
+ */
+void
+kp_session_boost_top_apps(int max_apps)
+{
+    GPtrArray *top_apps;
+    int boosted = 0;
+
+    if (!check_memory_available()) {
+        g_debug("Session boost: skipping due to memory constraints");
+        return;
+    }
+
+    top_apps = get_top_apps(max_apps);
+
+    for (guint i = 0; i < top_apps->len; i++) {
+        kp_exe_t *exe = g_ptr_array_index(top_apps, i);
+
+        /* Give strong negative lnprob to trigger immediate preload */
+        exe->lnprob = -15.0;  /* Very high priority (higher than manual apps at -10.0) */
+        boosted++;
+
+        g_debug("Session boost: %s (lnprob=-15.0, usage: %d sec)",
+                exe->path, exe->time);
+    }
+
+    g_ptr_array_free(top_apps, TRUE);
+
+    if (boosted > 0) {
+        g_message("Session boost: %d apps boosted for boot window (%d sec remaining)",
+                boosted, kp_session_window_remaining());
     }
 }
 
@@ -462,3 +492,4 @@ kp_session_free(void)
     session_state.session_detected = FALSE;
     session_state.preload_done = FALSE;
 }
+

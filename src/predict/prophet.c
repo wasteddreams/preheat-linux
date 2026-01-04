@@ -62,6 +62,7 @@
 #include "../monitor/proc.h"
 #include "../readahead/readahead.h"
 #include "../daemon/stats.h"
+#include "../daemon/session.h"
 
 #include <math.h>
 
@@ -505,6 +506,11 @@ kp_prophet_predict(gpointer data)
 
     /* Boost manual apps first (Preheat extension) */
     boost_manual_apps();
+
+    /* Boost session apps during boot window (fixes lnprob being reset before this) */
+    if (kp_session_in_boot_window()) {
+        kp_session_boost_top_apps(5);
+    }
 
     /* Markovs bid in exes */
     kp_markov_foreach(markov_bid_in_exes_wrapper, data);

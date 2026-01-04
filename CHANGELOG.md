@@ -5,7 +5,7 @@ All notable changes to Preheat will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-01-03
+## [1.0.1] - 2026-01-04
 
 ### Security Fixes
 
@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Bug Fixes
 
 #### High Severity
+
+**Boot Window Priority Preloading Not Working**
+- **Files:** `src/daemon/session.c`, `src/predict/prophet.c`, `src/state/state.c`
+- **Issue:** Session boost (`lnprob = -15.0`) was set by `kp_session_preload_top_apps()` but immediately overwritten by `exe_zero_prob_wrapper()` inside `kp_prophet_predict()`, rendering the boot window boost ineffective
+- **Fix:** Moved session boost logic inside `kp_prophet_predict()` via new `kp_session_boost_top_apps()` function, called after the probability reset but before Markov bidding
+- **Result:** Top 5 apps now correctly receive priority boosting every tick during the boot window
 
 **F-1: Use-After-Free in Statistics Module**
 - **File:** `src/daemon/stats.c:578`
@@ -176,7 +182,7 @@ The first production-ready release of Preheat, an adaptive readahead daemon for 
 - Manual control via `promote`, `demote`, `show-hidden`, and `reset` commands
 
 #### Session-Aware Boot Preloading
-- Aggressive 3-minute preload window immediately after login
+- Aggressive 5-minute preload window immediately after login
 - Prioritizes high-scoring applications during boot phase
 - Adapts to session patterns over time
 

@@ -382,10 +382,16 @@ kp_state_tick(gpointer data)
         if (kp_pause_is_active()) {
             g_debug("preloading paused - skipping prediction");
         } else {
+            /* Check for session start (needed for boot window detection) */
             kp_session_check();
+            
+            /* Load maps for top apps on first detection (one-time setup).
+             * The actual lnprob boost happens inside kp_prophet_predict()
+             * to avoid being overwritten by exe_zero_prob_wrapper(). */
             if (kp_session_in_boot_window()) {
                 g_debug("session boot window active (%d sec remaining)",
                         kp_session_window_remaining());
+                /* Load maps only - boost moved to prophet.c */
                 kp_session_preload_top_apps(5);
             }
 

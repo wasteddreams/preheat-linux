@@ -55,7 +55,7 @@ preheat-ctl status
 | Feature | Description |
 |---------|-------------|
 | Two-tier tracking | Priority pool (user apps) vs Observation pool (system) |
-| Session-aware boot | Aggressive 3-min preload window on login |
+| Session-aware boot | Aggressive 5-min preload window on login |
 | Smart seeding | Immediate value from XDG/shell history |
 | Pool management | `promote`, `demote`, `show-hidden`, `reset` |
 | Health checks | `health`, `explain`, `stats --verbose` |
@@ -91,12 +91,7 @@ sudo preheat-ctl promote code   # Always preload this app
 
 ## How It Works
 
-```
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  SCAN    │ →  │  LEARN   │ →  │ PREDICT  │ →  │ PRELOAD  │
-│  /proc   │    │ Patterns │    │  Score   │    │  Cache   │
-└──────────┘    └──────────┘    └──────────┘    └──────────┘
-```
+**SCAN** `/proc` → **LEARN** patterns → **PREDICT** scores → **PRELOAD** to cache
 
 *A continuous feedback loop that adapts to your usage patterns.*
 

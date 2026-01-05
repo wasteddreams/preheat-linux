@@ -87,6 +87,7 @@ typedef struct _read_context_t
     gpointer data;
     GError *err;
     char filebuf[FILELEN];
+    uint32_t running_crc;       /* Accumulated CRC32 for verification */
 } read_context_t;
 
 /* ========================================================================
@@ -414,7 +415,7 @@ err:
     kp_markov_free(markov, NULL);
 }
 
-/* Read CRC32 footer from state file */
+/* Read CRC32 footer from state file and verify against computed checksum */
 static void
 read_crc32(read_context_t *rc)
 {
@@ -423,6 +424,16 @@ read_crc32(read_context_t *rc)
     if (1 > sscanf(rc->line, "%x", &stored_crc)) {
         g_warning("State file CRC32 malformed - potential data corruption");
         rc->errmsg = READ_CRC_ERROR;
+        return;
+    }
+    
+    /* Verify computed CRC matches stored CRC */
+    if (rc->running_crc != stored_crc) {
+        g_warning("State file CRC32 mismatch: stored=%08X computed=%08X",
+                  stored_crc, rc->running_crc);
+        rc->errmsg = READ_CRC_ERROR;
+    } else {
+        g_debug("State file CRC32 verified: %08X", stored_crc);
     }
 }
 
@@ -547,7 +558,20 @@ read_pid(read_context_t *rc)
             pid, rc->current_exe->path, time(NULL) - start_time);
 }
 
-/* Helper callbacks for state initialization */
+/* ========================================================================
+ * STATE INITIALIZATION HELPERS
+ * ========================================================================
+ * After loading the state file, these callbacks synchronize runtime state
+ * with the current /proc filesystem and update Markov chain states.
+ * ======================================================================== */
+
+/**
+ * Mark an executable as running based on current /proc scan
+ *
+ * Called for each currently-running process found in /proc. If the
+ * executable is tracked in state, update its running timestamp and
+ * add it to the running_exes list.
+ */
 static void
 set_running_process_callback(pid_t G_GNUC_UNUSED pid, const char *path, int time)
 {
@@ -560,12 +584,20 @@ set_running_process_callback(pid_t G_GNUC_UNUSED pid, const char *path, int time
     }
 }
 
+/**
+ * Initialize Markov chain state based on current running status
+ *
+ * Sets the 4-state value (0-3) based on whether exe A and/or exe B
+ * are currently running. This synchronizes loaded Markov data with
+ * live system state.
+ */
 static void
 set_markov_state_callback(kp_markov_t *markov)
 {
     markov->state = markov_state(markov);
 }
 
+/* GHFunc wrapper for set_running_process_callback */
 static void
 set_running_process_callback_wrapper(gpointer key, gpointer value, gpointer user_data)
 {
@@ -573,6 +605,7 @@ set_running_process_callback_wrapper(gpointer key, gpointer value, gpointer user
     set_running_process_callback(0, (const char *)value, GPOINTER_TO_INT(user_data));
 }
 
+/* GFunc wrapper for set_markov_state_callback */
 static void
 set_markov_state_callback_wrapper(gpointer data, gpointer user_data)
 {
@@ -580,7 +613,16 @@ set_markov_state_callback_wrapper(gpointer data, gpointer user_data)
     set_markov_state_callback((kp_markov_t *)data);
 }
 
-/* Read state from GIOChannel */
+/**
+ * Read complete state from GIOChannel
+ *
+ * Parses the text-based state file line by line, reconstructing all
+ * in-memory data structures (maps, exes, exemaps, markovs, families).
+ * After loading, synchronizes with current /proc state.
+ *
+ * @param f  GIOChannel opened for reading
+ * @return NULL on success, error message string on failure (caller frees)
+ */
 char *
 kp_state_read_from_channel(GIOChannel *f)
 {
@@ -596,6 +638,7 @@ kp_state_read_from_channel(GIOChannel *f)
     rc.err = NULL;
     rc.current_exe = NULL;
     rc.expected_pids = 0;
+    rc.running_crc = 0;  /* Initial CRC value */
     rc.maps = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)kp_map_unref);
     rc.exes = g_hash_table_new(g_direct_hash, g_direct_equal);
 
@@ -611,6 +654,13 @@ kp_state_read_from_channel(GIOChannel *f)
 
         lineno++;
         rc.line = linebuf->str;
+        
+        /* Accumulate CRC for all lines except the CRC32 footer itself */
+        if (strncmp(linebuf->str, TAG_CRC32, 5) != 0) {
+            rc.running_crc = kp_crc32_update(rc.running_crc, 
+                                              linebuf->str, 
+                                              linebuf->len);
+        }
 
         int chars_consumed = 0;
         if (1 > sscanf(rc.line, "%31s%n", tag, &chars_consumed)) {
@@ -721,6 +771,13 @@ typedef struct _write_context_t
  * WRITE FUNCTIONS
  * ======================================================================== */
 
+/**
+ * Write state file header with version and timestamp
+ *
+ * Header format: "PRELOAD <version>\t<time>"
+ *   version - Current Preheat version (e.g., "1.0.1")
+ *   time    - Current internal time counter
+ */
 static void
 write_header(write_context_t *wc)
 {
@@ -730,6 +787,12 @@ write_header(write_context_t *wc)
     write_ln();
 }
 
+/**
+ * Write a single memory map entry to state file
+ *
+ * MAP format: "MAP <seq> <update_time> <offset> <length> <expansion> <uri>"
+ * See read_map() for field descriptions.
+ */
 static void
 write_map(kp_map_t *map, gpointer G_GNUC_UNUSED data, write_context_t *wc)
 {
@@ -749,6 +812,12 @@ write_map(kp_map_t *map, gpointer G_GNUC_UNUSED data, write_context_t *wc)
     g_free(uri);
 }
 
+/**
+ * Write a blacklisted executable entry to state file
+ *
+ * BADEXE format: "BADEXE <update_time> <expansion> <uri>"
+ * These are executables that failed to load and should be skipped.
+ */
 static void
 write_badexe(char *path, int update_time, write_context_t *wc)
 {
@@ -837,6 +906,12 @@ write_pid_callback(gpointer key, gpointer value, gpointer user_data)
     write_ln();
 }
 
+/**
+ * Write an exe-to-map association entry
+ *
+ * EXEMAP format: "EXEMAP <exe_seq> <map_seq> <probability>"
+ * Links an executable to a memory-mapped region with usage probability.
+ */
 static void
 write_exemap(kp_exemap_t *exemap, kp_exe_t *exe, write_context_t *wc)
 {
@@ -852,6 +927,13 @@ write_exemap_wrapper(gpointer exemap, gpointer exe, gpointer user_data)
     write_exemap((kp_exemap_t *)exemap, (kp_exe_t *)exe, (write_context_t *)user_data);
 }
 
+/**
+ * Write a Markov chain correlation entry
+ *
+ * MARKOV format: "MARKOV <exe_a_seq> <exe_b_seq> <time> <ttl[4]> <weights[4x4]>"
+ * Contains transition probabilities between two executables.
+ * States: 0=neither, 1=A running, 2=B running, 3=both running
+ */
 static void
 write_markov(kp_markov_t *markov, write_context_t *wc)
 {
@@ -881,6 +963,12 @@ write_markov_wrapper(gpointer data, gpointer user_data)
     write_markov((kp_markov_t *)data, (write_context_t *)user_data);
 }
 
+/**
+ * Write CRC32 integrity checksum as final footer
+ *
+ * CRC32 format: "CRC32 <hex_checksum>"
+ * Computed over all preceding file content for corruption detection.
+ */
 static void
 write_crc32(write_context_t *wc, int fd)
 {
@@ -920,6 +1008,14 @@ write_crc32(write_context_t *wc, int fd)
     write_ln();
 }
 
+/**
+ * Write an application family entry
+ *
+ * FAMILY format: "FAMILY <family_id> <method> <members>"
+ *   family_id - Unique identifier (e.g., "chromium-browsers")
+ *   method    - Discovery method enum value
+ *   members   - Semicolon-separated list of member paths
+ */
 static void
 write_family(gpointer key, kp_app_family_t *family, write_context_t *wc)
 {
@@ -951,7 +1047,24 @@ write_family_wrapper(gpointer key, gpointer value, gpointer user_data)
     write_family(key, (kp_app_family_t *)value, (write_context_t *)user_data);
 }
 
-/* Write state to GIOChannel with CRC32 footer */
+/**
+ * Write complete state to GIOChannel with CRC32 footer
+ *
+ * Writes all state components in canonical order:
+ * 1. Header (version, time)
+ * 2. Maps (memory regions)
+ * 3. Bad exes (blacklisted)
+ * 4. Exes (tracked executables + their PIDs)
+ * 5. Exemaps (exe-to-map links)
+ * 6. Markovs (correlation chains)
+ * 7. Families (app groupings)
+ * 8. Preload times (timestamp cache)
+ * 9. CRC32 (integrity footer)
+ *
+ * @param f   GIOChannel to write to
+ * @param fd  File descriptor for CRC32 calculation
+ * @return NULL on success, error message string on failure
+ */
 char *
 kp_state_write_to_channel(GIOChannel *f, int fd)
 {
@@ -988,7 +1101,17 @@ kp_state_write_to_channel(GIOChannel *f, int fd)
         return NULL;
 }
 
-/* Handle corrupt state file by renaming it */
+/**
+ * Handle corrupt state file by renaming it with timestamp suffix
+ *
+ * When a state file fails to load (CRC mismatch, parse error), this
+ * function renames it to <statefile>.broken.<timestamp> to preserve
+ * evidence while allowing a fresh start.
+ *
+ * @param statefile Path to the corrupt state file
+ * @param reason    Human-readable corruption reason
+ * @return TRUE (always, indicates fresh start should proceed)
+ */
 gboolean
 kp_state_handle_corrupt_file(const char *statefile, const char *reason)
 {

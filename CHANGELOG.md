@@ -127,10 +127,10 @@ A comprehensive memory safety audit was conducted using cppcheck, flawfinder, an
 - **Issue:** Forked child process called `exit(0)` which runs parent's atexit handlers
 - **Fix:** Changed to `_exit(0)` to bypass atexit handlers in child process
 
-**MSA-2: CRC Errors Logged at Debug Level (MEDIUM)**
-- **File:** `src/state/state_io.c:424`
-- **Issue:** Malformed CRC32 in state file logged as debug, masking corruption
-- **Fix:** Upgraded to `g_warning()` and set error flag
+**MSA-2: CRC32 Verification Edge Cases (MEDIUM)**
+- **File:** `src/state/state_io.c`
+- **Issue:** CRC32 validation had edge cases where incremental checksum wasn't accumulated correctly during parsing, causing false positives on valid state files
+- **Fix:** Refactored CRC accumulation to use incremental updates during line parsing, properly excluding the CRC32 footer from computation
 
 **MSA-3: Memory Leak at Shutdown (LOW)**
 - **File:** `src/daemon/main.c:486-489`

@@ -144,6 +144,9 @@ void kp_state_load(const char *statefile)
 
     kp_proc_get_memstat(&(kp_state->memstat));
     kp_state->memstat_timestamp = kp_state->time;
+    
+    /* Clean up old broken state files (older than 48 hours) */
+    kp_state_cleanup_old_broken_files(statefile, 48);
 }
 
 /**
@@ -307,9 +310,11 @@ void kp_state_save(const char *statefile)
  */
 void kp_state_free(void)
 {
-    g_message("freeing state memory begin");
+    g_message("freeing state memory");
+    
     g_hash_table_destroy(kp_state->bad_exes);
     kp_state->bad_exes = NULL;
+    
     g_hash_table_destroy(kp_state->exes);
     kp_state->exes = NULL;
 
@@ -317,6 +322,7 @@ void kp_state_free(void)
         g_hash_table_destroy(kp_state->app_families);
         kp_state->app_families = NULL;
     }
+    
     if (kp_state->exe_to_family) {
         g_hash_table_destroy(kp_state->exe_to_family);
         kp_state->exe_to_family = NULL;
@@ -324,12 +330,14 @@ void kp_state_free(void)
 
     g_assert(g_hash_table_size(kp_state->maps) == 0);
     g_assert(kp_state->maps_arr->len == 0);
+    
     g_hash_table_destroy(kp_state->maps);
     kp_state->maps = NULL;
+    
     g_slist_free(kp_state->running_exes);
     kp_state->running_exes = NULL;
+    
     g_ptr_array_free(kp_state->maps_arr, TRUE);
-    g_debug("freeing state memory done");
 }
 
 /**

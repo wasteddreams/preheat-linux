@@ -758,7 +758,8 @@ write_preload_time(gpointer key, gpointer value, gpointer user_data)
     GIOChannel *channel = (GIOChannel *)user_data;
     gchar *line;
     
-    line = g_strdup_printf("PRELOAD\t%s\t%ld\n", app_name, (long)timestamp);
+    /* Use PTIME tag (v1.0.2+) to avoid collision with PRELOAD header */
+    line = g_strdup_printf("PTIME\t%s\t%ld\n", app_name, (long)timestamp);
     g_io_channel_write_chars(channel, line, -1, NULL, NULL);
     g_free(line);
 }

@@ -247,6 +247,8 @@ sudo systemctl start preheat
 
 > **Warning:** This loses learned patterns. Daemon will need to relearn.
 
+> **Note (v1.0.2+):** When state corruption is detected, the file is renamed to `.broken.<timestamp>` and preserved for debugging. Old broken files (older than 48 hours) are automatically cleaned up on daemon startup.
+
 ---
 
 ## Performance Issues

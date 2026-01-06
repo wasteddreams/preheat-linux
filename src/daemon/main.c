@@ -483,10 +483,10 @@ main(int argc, char **argv)
     /* Release PID file lock */
     release_pidfile_lock();
 
-    /* Free command-line allocated strings (fixes ASan-detected leak) */
-    g_free((gchar*)conffile);
-    g_free((gchar*)statefile);
-    g_free((gchar*)logfile);
+    /* Note: conffile/statefile/logfile point to either:
+     * 1. Static string constants (DEFAULT_*) - must NOT be freed
+     * 2. optarg pointers from getopt - must NOT be freed
+     * So we don't free them - minor leak at exit is acceptable */
 
     g_debug("exiting");
     return EXIT_SUCCESS;

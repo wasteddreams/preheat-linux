@@ -57,15 +57,44 @@
 #define SESSION_WINDOW_DEFAULT 300    /* 5 minutes */
 #define SESSION_MAX_APPS_DEFAULT 5
 #define SESSION_MEMORY_THRESHOLD 20   /* 20% minimum free */
+/**
+ * Helper struct for map lookup
+ */
+typedef struct {
+    const char *path;
+    size_t offset;
+    size_t length;
+} map_lookup_t;
+
+/**
+ * Predicate for finding existing map in hash table
+ */
+static gboolean
+find_existing_map(gpointer key, gpointer value, gpointer user_data)
+{
+    kp_map_t *map = (kp_map_t *)key;
+    map_lookup_t *lookup = (map_lookup_t *)user_data;
+    
+    (void)value;  /* Value is just GINT_TO_POINTER(1), unused */
+    
+    return (map->offset == lookup->offset &&
+            map->length == lookup->length &&
+            strcmp(map->path, lookup->path) == 0);
+}
 
 /**
  * Load a single file as a map for an exe
+ * 
+ * BUG FIX: Check if map already exists in global state before creating.
+ * Shared libraries (libc, etc.) are used by multiple apps, so we must
+ * reuse existing maps to avoid duplicate registration assertions.
  */
 static gboolean
 load_single_map(kp_exe_t *exe, const char *path)
 {
     struct stat st;
     kp_map_t *map;
+    map_lookup_t lookup;
     kp_exemap_t *exemap;
     
     if (stat(path, &st) < 0)
@@ -74,6 +103,25 @@ load_single_map(kp_exe_t *exe, const char *path)
     if ((size_t)st.st_size < (size_t)kp_conf->model.minsize)
         return FALSE;
     
+    /* Check if map already exists in global state */
+    lookup.path = path;
+    lookup.offset = 0;
+    lookup.length = st.st_size;
+    
+    /* g_hash_table_find returns the KEY (map pointer), not VALUE */
+    map = g_hash_table_find(kp_state->maps, find_existing_map, &lookup);
+    if (map) {
+        /* Map exists - just link it to this exe */
+        exemap = kp_exe_map_new(exe, map);
+        if (exemap) {
+            exemap->prob = 1.0;
+            exe->size += st.st_size;
+            return TRUE;
+        }
+        return FALSE;
+    }
+    
+    /* Create new map */
     map = kp_map_new(path, 0, st.st_size);
     if (!map)
         return FALSE;

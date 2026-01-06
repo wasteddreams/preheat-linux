@@ -5,6 +5,32 @@ All notable changes to Preheat will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-01-06
+
+### Improvements
+
+**Session Preload Optimization**
+- Shared library maps are now reused across applications during session boot preloading
+- Reduces memory overhead and prevents redundant map registration
+- Improves boot window efficiency for applications sharing common libraries
+
+**State File Format**
+- Preload timestamp entries now use dedicated `PTIME` tag for clearer parsing
+- Backward compatible: old state files with legacy format are still readable
+- Improved robustness of state file parsing
+
+**Automatic Cleanup**
+- Old broken state files (older than 48 hours) are automatically removed on daemon startup
+- Prevents disk clutter from accumulated diagnostic files
+
+### Bug Fixes
+
+**Memory Management**
+- Fixed memory corruption during daemon shutdown
+- Improved cleanup sequence for command-line argument handling
+
+---
+
 ## [1.0.1] - 2026-01-04
 
 ### Security Fixes

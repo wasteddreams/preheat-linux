@@ -62,7 +62,8 @@
 #define TAG_FAMILY      "FAMILY"
 #define TAG_CRC32       "CRC32"
 #define TAG_PRELOAD_TIMES "PRELOAD_TIMES"  /* Preload timestamps section */
-#define TAG_PRELOAD_TIME  "PRELOAD"        /* Individual preload timestamp */
+#define TAG_PRELOAD_TIME  "PTIME"          /* Individual preload timestamp (v1.0.2+) */
+#define TAG_PRELOAD_TIME_LEGACY "PRELOAD"  /* Legacy format (v1.0.0-1.0.1) */
 
 #define READ_TAG_ERROR              "invalid tag"
 #define READ_SYNTAX_ERROR           "invalid syntax"
@@ -712,8 +713,10 @@ kp_state_read_from_channel(GIOChannel *f)
             /* Just a header, count is informational */
             g_debug("Reading preload timestamps section");
         }
-        else if (!strcmp(tag, TAG_PRELOAD_TIME) && lineno > 1) {
-            /* PRELOAD <app_name> <timestamp> - but only NOT on line 1 (header uses PRELOAD too) */
+        else if ((!strcmp(tag, TAG_PRELOAD_TIME) || 
+                  (!strcmp(tag, TAG_PRELOAD_TIME_LEGACY) && lineno > 1))) {
+            /* PTIME <app_name> <timestamp> (new format)
+             * PRELOAD <app_name> <timestamp> (legacy, only after line 1) */
             char app_name[256];
             long timestamp;
             if (sscanf(rc.line, "%255s\t%ld", app_name, &timestamp) == 2) {
@@ -1136,4 +1139,74 @@ kp_state_handle_corrupt_file(const char *statefile, const char *reason)
 
     g_free(broken_path);
     return TRUE;
+}
+
+/**
+ * Clean up old broken state files
+ *
+ * Removes .broken.* files older than max_age_hours to prevent disk clutter.
+ * Called during daemon startup.
+ *
+ * @param statefile  Base path to state file (e.g., /var/lib/preheat/preheat.state)
+ * @param max_age_hours  Maximum age in hours before deletion (default: 48)
+ */
+void
+kp_state_cleanup_old_broken_files(const char *statefile, int max_age_hours)
+{
+    char *dir_path;
+    char *base_name;
+    char *pattern;
+    GDir *dir;
+    const gchar *filename;
+    time_t now = time(NULL);
+    time_t max_age_sec = max_age_hours * 3600;
+    int removed_count = 0;
+    
+    if (!statefile) return;
+    
+    /* Extract directory and basename */
+    dir_path = g_path_get_dirname(statefile);
+    base_name = g_path_get_basename(statefile);
+    pattern = g_strdup_printf("%s.broken.", base_name);
+    
+    dir = g_dir_open(dir_path, 0, NULL);
+    if (!dir) {
+        g_free(dir_path);
+        g_free(base_name);
+        g_free(pattern);
+        return;
+    }
+    
+    while ((filename = g_dir_read_name(dir)) != NULL) {
+        if (g_str_has_prefix(filename, pattern)) {
+            char *full_path = g_build_filename(dir_path, filename, NULL);
+            struct stat st;
+            
+            if (stat(full_path, &st) == 0) {
+                time_t age = now - st.st_mtime;
+                
+                if (age > max_age_sec) {
+                    if (unlink(full_path) == 0) {
+                        g_message("Removed old broken state file: %s (age: %ld hours)",
+                                  filename, age / 3600);
+                        removed_count++;
+                    } else {
+                        g_warning("Failed to remove old broken file %s: %s",
+                                  filename, strerror(errno));
+                    }
+                }
+            }
+            
+            g_free(full_path);
+        }
+    }
+    
+    g_dir_close(dir);
+    g_free(dir_path);
+    g_free(base_name);
+    g_free(pattern);
+    
+    if (removed_count > 0) {
+        g_message("Cleaned up %d old broken state file(s)", removed_count);
+    }
 }

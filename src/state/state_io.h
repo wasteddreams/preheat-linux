@@ -36,4 +36,7 @@ char *kp_state_write_to_channel(GIOChannel *f, int fd);
 /* Handle corrupt state file */
 gboolean kp_state_handle_corrupt_file(const char *statefile, const char *reason);
 
+/* Clean up old broken state files (older than max_age_hours) */
+void kp_state_cleanup_old_broken_files(const char *statefile, int max_age_hours);
+
 #endif /* STATE_IO_H */

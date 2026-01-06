@@ -50,7 +50,7 @@ preheat-ctl status
 
 ---
 
-## Features (v1.0.1)
+## Features (v1.0.2)
 
 | Feature | Description |
 |---------|-------------|
